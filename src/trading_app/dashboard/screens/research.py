@@ -419,8 +419,10 @@ def _incident_rows(health) -> str:
                 ),
                 primary_sub=escape(H.field(incident, "summary", "")),
                 meta=escape(status),
-                value=escape(H.field(incident, "suggested_action", "")),
-                value_tone="warn",
+                # Suggested action is a sentence — render as a full-width
+                # note line below the row, not in the value column where it
+                # would crush the primary label down to one word per line.
+                note=escape(H.field(incident, "suggested_action", "")),
                 tone=row_tone,
             )
         )

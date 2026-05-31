@@ -241,21 +241,37 @@ def row(
     meta: str = "",
     value: str = "",
     value_tone: str = "",
+    note: str = "",
     tone: str = "",
 ) -> str:
-    """A single row in a row-list. ``tone`` adds left-rail accent."""
+    """A single row in a row-list. ``tone`` adds a left-rail accent.
+
+    Slots:
+    - ``primary`` / ``primary_sub`` — the main label and a small description.
+    - ``meta`` — short status or tag in the middle column.
+    - ``value`` — short right-aligned text or number. **Keep it short.**
+    - ``note`` — long-form text (a suggested action, an evidence string)
+      that renders as its own full-width line below the row. Use this
+      instead of ``value`` when the text is a sentence — the value
+      column will otherwise crush the primary column down to one word
+      per line.
+    """
 
     klass = f"row {('row--' + tone) if tone else ''}".strip()
+    if note:
+        klass += " row--with-note"
     sub = f"<small>{primary_sub}</small>" if primary_sub else ""
     meta_html = f'<div class="row__meta">{meta}</div>' if meta else ""
     value_html = (
         f'<div class="row__value {value_tone}">{value}</div>' if value else ""
     )
+    note_html = f'<div class="row__note">{note}</div>' if note else ""
     return f"""
       <div class="{klass}">
         <div class="row__primary">{primary}{sub}</div>
         {meta_html}
         {value_html}
+        {note_html}
       </div>"""
 
 

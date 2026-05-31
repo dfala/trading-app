@@ -764,6 +764,31 @@ button {
 .row--warn { border-left: 2px solid var(--warn); }
 .row--danger { border-left: 2px solid var(--neg); }
 
+/* Rows with a long-form note get a second grid row that spans full width
+   so sentences (suggested actions, evidence strings) don't compete for
+   space with the primary label. */
+.row--with-note {
+  grid-template-rows: auto auto;
+  row-gap: 8px;
+}
+.row__note {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+.row__note::before {
+  content: "→ ";
+  color: var(--ai);
+  opacity: 0.8;
+  margin-right: 4px;
+}
+.row--warn .row__note::before { color: var(--warn); }
+.row--danger .row__note::before { color: var(--neg); }
+
 /* Anchor-styled rows — entire row is clickable (Learn surface deep-links) */
 a.row,
 .row--link {
@@ -2124,11 +2149,13 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong>SPY BUY</strong><small>daily-order-1</small></div>
         <div class="row__meta">FILLED</div>
         <div class="row__value pos">POS</div>
+        
       </div>
       <div class="row row--danger">
         <div class="row__primary"><strong>SPY BUY</strong><small>daily-order-2</small></div>
         <div class="row__meta">REJECTED</div>
         <div class="row__value neg">NEG</div>
+        
       </div></div>
         </div>
         
@@ -2269,6 +2296,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong>SPY</strong><small>fresh</small></div>
         
         <div class="row__value pos">$500.00</div>
+        
       </div></div>
           <p class="microcopy" data-field="price-warning">IEX/free data is development-grade and should not drive final funding decisions.</p>
           <p class="microcopy">IEX development-grade demo feed</p>
@@ -2335,6 +2363,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
       <div class="row row--warn">
         <div class="row__primary"><strong>IEX Development Grade</strong><small>IEX/free data is development-grade and should not drive final funding decisions.</small></div>
         <div class="row__meta">dataset</div>
+        
         
       </div>
       </div>
@@ -2529,14 +2558,17 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><small>Momentum reversals after sector leadership changes.</small></div>
         
         
+        
       </div>
       <div class="row row--warn">
         <div class="row__primary"><small>High correlation across sectors during broad market stress.</small></div>
         
         
+        
       </div>
       <div class="row row--warn">
         <div class="row__primary"><small>Overfitting lookback/top-N parameters to recent history.</small></div>
+        
         
         
       </div></div>
@@ -2558,14 +2590,17 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><small>Explain rank changes and trade rationale.</small></div>
         
         
+        
       </div>
       <div class="row row--ai">
         <div class="row__primary"><small>Compare candidate parameters overnight.</small></div>
         
         
+        
       </div>
       <div class="row row--ai">
         <div class="row__primary"><small>Recommend shadow candidates without changing the active model.</small></div>
+        
         
         
       </div></div>
@@ -2633,6 +2668,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong>SPY</strong><small>avg <span class="mono">$500.00</span></small></div>
         <div class="row__meta"><span class="mono">5 sh</span> <span class="mono"><svg class="spark" viewBox="0 0 80 28" preserveAspectRatio="none" role="img" aria-label="SPY trend"><path d="M 2.0,26.0 L 21.0,26.0 L 40.0,26.0 L 59.0,26.0 L 78.0,26.0 L 78.0 26 L 2 26 Z" class="spark-fill pos" /><path d="M 2.0,26.0 L 21.0,26.0 L 40.0,26.0 L 59.0,26.0 L 78.0,26.0" class="pos" /><circle class="spark-dot pos" cx="78.0" cy="26.0" r="1.8" /></svg></span></div>
         <div class="row__value ">$2,500.00</div>
+        
       </div></div>
         </div>
         
@@ -2655,6 +2691,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong>SPY</strong><small>2026-05-29T16:00:00+00:00</small></div>
         <div class="row__meta"><span class="pill pill--good" >BUY</span></div>
         <div class="row__value pos"><span class="mono">5 @ $500.00</span></div>
+        
       </div></div>
         </div>
         
@@ -2893,6 +2930,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong class="mono"><span class="glossary">MAX_ORDERS_PER_DAY<button type="button" class="glossary__btn" aria-label="What does MAX_ORDERS_PER_DAY mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>MAX_ORDERS_PER_DAY</strong><span>A safety rule that caps how many orders the strategy can place in a single trading day. Prevents a runaway model from spamming the broker.</span></span></span></strong><small>We didn&#x27;t place this trade — you&#x27;ve already hit today&#x27;s order limit. This is a safety rule that prevents a runaway strategy from spamming the broker.</small></div>
         <div class="row__meta"><span class="mono">daily-order-2</span> · SPY</div>
         
+        
       </div></div>
         </div>
         
@@ -2910,10 +2948,11 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="surface__body">
           
       <div class="row-list" data-alert-list>
-      <div class="row row--warn">
+      <div class="row row--warn row--with-note">
         <div class="row__primary"><strong>Risk rejected an order</strong><small>Demo max-orders rule rejected the second paper order.</small></div>
         <div class="row__meta">risk_rejection</div>
-        <div class="row__value warn">daily-order-2 / SPY / MAX_ORDERS_PER_DAY</div>
+        
+        <div class="row__note">daily-order-2 / SPY / MAX_ORDERS_PER_DAY</div>
       </div></div>
       <p class="microcopy">
         Alerts surface from the runtime journal. They never auto-dismiss — close the underlying condition first.
@@ -3113,16 +3152,19 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="row__primary"><strong>runtime_loop</strong><small>Demo runtime heartbeat is fresh.</small></div>
         
         <div class="row__value pos">healthy</div>
+        
       </div>
       <div class="row">
         <div class="row__primary"><strong>reconciliation</strong><small>Broker and internal ledger reconciliation is clean.</small></div>
         
         <div class="row__value pos">healthy</div>
+        
       </div>
       <div class="row">
         <div class="row__primary"><strong>alerts</strong><small>One demo warning alert is active.</small></div>
         
         <div class="row__value warn">degraded</div>
+        
       </div></div>
         </div>
         <div>
@@ -3131,10 +3173,11 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
             <strong data-numeric="1">1</strong>
           </div>
           <div class="row-list" data-incident-list>
-      <div class="row row--warn">
+      <div class="row row--warn row--with-note">
         <div class="row__primary"><strong>Risk rejected an order</strong><small>Demo max-orders rule rejected the second paper order.</small></div>
         <div class="row__meta">degraded</div>
-        <div class="row__value warn">Review the rejected order before changing strategy.</div>
+        
+        <div class="row__note">Review the rejected order before changing strategy.</div>
       </div></div>
         </div>
       </div>

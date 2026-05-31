@@ -133,7 +133,9 @@ def create_dashboard_server(
                 health_provider=health_provider,
             )
             if status == HTTPStatus.OK and content_type.startswith("text/html"):
-                self._write_payload(status, content_type, body)
+                # ``no_store`` so iteration changes show up on simple refresh
+                # without forcing the user to hard-reload (Cmd+Shift+R).
+                self._write_payload(status, content_type, body, no_store=True)
                 return
             if status == HTTPStatus.OK:
                 self._write_payload(status, content_type, body, no_store=True)

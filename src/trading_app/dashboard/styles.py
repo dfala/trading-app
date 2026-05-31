@@ -789,6 +789,31 @@ button {
 .row--warn { border-left: 2px solid var(--warn); }
 .row--danger { border-left: 2px solid var(--neg); }
 
+/* Rows with a long-form note get a second grid row that spans full width
+   so sentences (suggested actions, evidence strings) don't compete for
+   space with the primary label. */
+.row--with-note {
+  grid-template-rows: auto auto;
+  row-gap: 8px;
+}
+.row__note {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+.row__note::before {
+  content: "→ ";
+  color: var(--ai);
+  opacity: 0.8;
+  margin-right: 4px;
+}
+.row--warn .row__note::before { color: var(--warn); }
+.row--danger .row__note::before { color: var(--neg); }
+
 /* Anchor-styled rows — entire row is clickable (Learn surface deep-links) */
 a.row,
 .row--link {

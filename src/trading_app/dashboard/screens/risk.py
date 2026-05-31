@@ -354,8 +354,10 @@ def _alerts(snapshot: OperatorDashboardSnapshot) -> str:
                     meta=escape(
                         H.enum_value(H.field(alert, "code"), "runtime_alert")
                     ),
-                    value=escape(evidence),
-                    value_tone="warn",
+                    # Evidence is a "/"-joined list of identifiers — long
+                    # text that belongs on its own line, not in the
+                    # right-aligned value column where it crushes the title.
+                    note=escape(evidence) if evidence else "",
                     tone=row_tone,
                 )
             )
