@@ -125,7 +125,7 @@ def mode_badge(mode: str) -> str:
     is_paper = "paper" in mode.casefold()
     klass = "mode mode--paper" if is_paper else "mode mode--live"
     return (
-        f'<span style="display: inline-flex; align-items: center; gap: 6px;">'
+        f'<span data-tour-anchor="mode" style="display: inline-flex; align-items: center; gap: 6px;">'
         f'<span class="{klass}" data-field="mode">{escape(mode)}</span>'
         f"{glossary_icon(key='paper_trading')}"
         f"</span>"
@@ -143,6 +143,61 @@ def confidence_dots(score: float | None) -> str:
         f'<span class="{"on" if i < filled else ""}"></span>' for i in range(5)
     )
     return f'<span class="conf-dots" aria-label="confidence">{dots}</span>'
+
+
+def confidence_band(score: float | None) -> str:
+    """Plain-language confidence band for a 0–1 score.
+
+    - 0.0–0.4 = Low
+    - 0.4–0.7 = Moderate
+    - 0.7–0.9 = High
+    - 0.9–1.0 = Very high
+    - None    = "—" (not enough evidence)
+    """
+
+    if score is None:
+        return "—"
+    value = float(score)
+    if value < 0.4:
+        return "Low"
+    if value < 0.7:
+        return "Moderate"
+    if value < 0.9:
+        return "High"
+    return "Very high"
+
+
+def confidence(score: float | None) -> str:
+    """Compact dots + plain-language band + numeric score with glossary tooltip.
+
+    Used everywhere the dashboard shows an AI confidence value. Beginners
+    read the band; power users still see the number; the ``?`` button
+    surfaces a definition that hedges appropriately.
+    """
+
+    band = confidence_band(score)
+    score_text = f"{float(score):.2f}" if score is not None else "—"
+    return (
+        f'<span class="confidence">'
+        f"{confidence_dots(score)}"
+        f' <span class="confidence__band {_band_class(score)}">{band}</span>'
+        f' <span class="confidence__score mono">· {score_text}</span>'
+        f" {glossary_icon(key='ai_confidence')}"
+        f"</span>"
+    )
+
+
+def _band_class(score: float | None) -> str:
+    if score is None:
+        return ""
+    value = float(score)
+    if value < 0.4:
+        return "confidence__band--low"
+    if value < 0.7:
+        return "confidence__band--mod"
+    if value < 0.9:
+        return "confidence__band--high"
+    return "confidence__band--vhigh"
 
 
 def k_list(rows: Iterable[tuple[str, str]], *, numeric: bool = False) -> str:
@@ -265,8 +320,23 @@ def glossary(
     aria_label = (
         f"What does {term_value or text} mean?".strip() if (term_value or text) else "Definition"
     )
-    label_html = escape(text) if text else ""
     icon_class = "glossary__btn" if text else "glossary__btn glossary__btn--solo"
+
+    # Phase B1: render both plain and technical labels; the global vocab
+    # toggle (data-vocab on <html>) chooses which is visible via CSS. If
+    # the two labels are identical we render once to save weight.
+    if not text:
+        label_html = ""
+    else:
+        plain_label = text
+        tech_label = term_value or text
+        if plain_label == tech_label:
+            label_html = escape(plain_label)
+        else:
+            label_html = (
+                f'<span class="g-plain">{escape(plain_label)}</span>'
+                f'<span class="g-tech">{escape(tech_label)}</span>'
+            )
 
     return (
         f'<span class="glossary">'
@@ -474,7 +544,7 @@ def left_rail(*, broker: str, kill_switch_armed: bool) -> str:
         <div></div>
         <div class="rail__foot">
           <strong data-field="broker">{escape(broker)}</strong>
-          <span style="display: inline-flex; align-items: center; gap: 6px;">
+          <span data-tour-anchor="kill" style="display: inline-flex; align-items: center; gap: 6px;">
             <span data-field="kill-switch" class="{kill_class}">{kill_label}</span>
             {glossary_icon(key='kill_switch')}
           </span>
@@ -483,7 +553,7 @@ def left_rail(*, broker: str, kill_switch_armed: bool) -> str:
 
 
 def top_bar(*, mode: str, generated_at: str) -> str:
-    """Sticky top bar with mode badge, generated time, paper-mode microcopy."""
+    """Sticky top bar with mode badge, vocab toggle, time."""
 
     return f"""
       <header class="topbar">
@@ -498,7 +568,98 @@ def top_bar(*, mode: str, generated_at: str) -> str:
             data-title_ai="AI Review">Command Center</span>
         </div>
         <div class="topbar__strip">
+          {tour_button()}
+          {vocab_toggle()}
           {mode_badge(mode)}
           <span class="topbar__time"><span data-refresh-time> {escape(generated_at)}</span></span>
         </div>
       </header>"""
+
+
+def tour() -> str:
+    """First-time tour overlay (Phase B2).
+
+    Three steps, dismissible, persisted via ``localStorage.dashTourSeen``.
+    Each step's ``data-tour-target`` is a CSS selector the JS uses to
+    spotlight an element on the page.
+    """
+
+    steps = [
+        {
+            "n": 1,
+            "target": "[data-tour-anchor='hero']",
+            "title": "Your simulated portfolio",
+            "body": (
+                "This big number is your total — cash plus the value of every "
+                "position you hold. It's all simulated. No real account is touched."
+            ),
+        },
+        {
+            "n": 2,
+            "target": "[data-tour-anchor='mode']",
+            "title": "You're always in paper mode",
+            "body": (
+                "This badge sits in the top bar on every screen. It exists so "
+                "you can never confuse a practice trade for a real one — and "
+                "real-money trading from this app is impossible by design."
+            ),
+        },
+        {
+            "n": 3,
+            "target": "[data-tour-anchor='kill']",
+            "title": "The kill switch stops everything",
+            "body": (
+                "If anything ever feels wrong, press this. It halts every paper "
+                "order immediately. You can press it freely — it can't affect "
+                "real money, because there is no real money here."
+            ),
+        },
+    ]
+    cards = []
+    for step in steps:
+        is_last = step["n"] == len(steps)
+        next_label = "Done" if is_last else "Next →"
+        cards.append(
+            f"""
+        <article class="tour__card" data-tour-step="{step['n']}"
+                 data-tour-target="{step['target']}" hidden>
+          <header class="tour__card-head">
+            <span class="tour__count">Step {step['n']} of {len(steps)}</span>
+            <button type="button" class="tour__skip" data-tour-skip aria-label="Skip tour">×</button>
+          </header>
+          <h3 class="tour__title">{step['title']}</h3>
+          <p class="tour__body">{step['body']}</p>
+          <footer class="tour__controls">
+            <button type="button" class="tour__btn tour__btn--ghost" data-tour-skip>Skip tour</button>
+            <button type="button" class="tour__btn tour__btn--primary" data-tour-next>{next_label}</button>
+          </footer>
+        </article>"""
+        )
+
+    return f"""
+    <div class="tour" data-tour hidden aria-hidden="true">
+      <div class="tour__backdrop" data-tour-skip></div>
+      {"".join(cards)}
+    </div>"""
+
+
+def tour_button() -> str:
+    """A small ``?`` button in the topbar that re-opens the tour on demand."""
+
+    return (
+        '<button type="button" class="tour-trigger" data-tour-start '
+        'aria-label="Open dashboard tour" title="Take the tour">Tour</button>'
+    )
+
+
+def vocab_toggle() -> str:
+    """The Plain / Technical segmented control for the topbar (Phase B1)."""
+
+    return (
+        '<div class="vocab-toggle" role="group" aria-label="Vocabulary">'
+        '<button type="button" class="vocab-toggle__btn" '
+        'data-vocab-set="plain" aria-pressed="true" title="Plain language">Plain</button>'
+        '<button type="button" class="vocab-toggle__btn" '
+        'data-vocab-set="technical" aria-pressed="false" title="Technical terms">Technical</button>'
+        "</div>"
+    )

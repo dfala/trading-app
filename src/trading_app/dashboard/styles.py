@@ -813,6 +813,224 @@ button {
 }
 
 /* ============================================================
+   Tour overlay (Phase B2)
+   ============================================================ */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+}
+
+.tour[hidden] { display: none; }
+
+.tour__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.74);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.tour__card {
+  position: fixed;
+  width: min(420px, calc(100vw - 32px));
+  padding: 22px 24px;
+  border: 1px solid rgba(94, 227, 255, 0.35);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  z-index: 102;
+}
+
+.tour__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tour__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ai);
+}
+
+.tour__skip {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  color: var(--fg-faint);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tour__skip:hover { color: var(--fg); }
+
+.tour__title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+
+.tour__body {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.tour__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18px;
+}
+
+.tour__btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: background-color 80ms linear, border-color 80ms linear, color 80ms linear;
+}
+
+.tour__btn--ghost {
+  color: var(--fg-muted);
+  border: 1px solid transparent;
+}
+
+.tour__btn--ghost:hover { color: var(--fg); }
+
+.tour__btn--primary {
+  color: var(--ai);
+  border: 1px solid rgba(94, 227, 255, 0.45);
+  background: var(--ai-soft);
+}
+
+.tour__btn--primary:hover {
+  background: rgba(94, 227, 255, 0.18);
+}
+
+/* The element currently being spotlighted */
+[data-tour-spotlight] {
+  position: relative;
+  z-index: 101;
+  box-shadow:
+    0 0 0 2px var(--ai),
+    0 0 0 8px rgba(94, 227, 255, 0.18),
+    0 0 32px rgba(94, 227, 255, 0.45);
+  border-radius: 8px;
+  background-color: var(--overlay);
+}
+
+/* Small "Tour" trigger button in the topbar */
+.tour-trigger {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  border: 1px solid var(--line);
+  background: var(--raised);
+  transition: color 80ms linear, border-color 80ms linear;
+}
+
+.tour-trigger:hover {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.45);
+}
+
+.tour-trigger:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Plain / Technical vocabulary toggle (Phase B1)
+   ============================================================ */
+
+.vocab-toggle {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  gap: 2px;
+}
+
+.vocab-toggle__btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  background: transparent;
+  transition: color 80ms linear, background-color 80ms linear;
+}
+
+.vocab-toggle__btn:hover {
+  color: var(--fg);
+}
+
+.vocab-toggle__btn[aria-pressed="true"] {
+  color: var(--ai);
+  background: var(--ai-soft);
+}
+
+.vocab-toggle__btn:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: 2px;
+}
+
+/* Default (no vocab attribute) = plain */
+.g-plain { display: inline; }
+.g-tech  { display: none; }
+
+html[data-vocab="technical"] .g-plain { display: none; }
+html[data-vocab="technical"] .g-tech  { display: inline; }
+
+/* Block-level surfaces that only show in plain (or only in technical) mode */
+html[data-vocab="technical"] .hide-in-tech { display: none !important; }
+html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
+
+/* "What happened today" — beginner card on Home (Phase B3) */
+.today-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.today-bullets li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+.today-bullets__dot {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ai);
+  opacity: 0.85;
+}
+
+/* ============================================================
    Glossary — plain-language label with `?` popover
    ============================================================ */
 
@@ -913,6 +1131,32 @@ button {
 }
 
 .conf-dots span.on { background: var(--ai); }
+
+/* Banded confidence — dots + word + number (Phase B4) */
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.confidence__band {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.confidence__band--low   { color: var(--fg-faint); }
+.confidence__band--mod   { color: var(--warn); }
+.confidence__band--high  { color: var(--ai); }
+.confidence__band--vhigh { color: var(--pos); }
+
+.confidence__score {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
 
 .memo {
   padding: 18px 20px;

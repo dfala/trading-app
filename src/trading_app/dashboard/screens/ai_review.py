@@ -60,8 +60,7 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
         confidence = nightly.recommendations[0].confidence
     else:
         confidence = None
-    dots = C.confidence_dots(confidence)
-    confidence_text = f"{confidence:.2f}" if confidence is not None else "—"
+    confidence_html = C.confidence(confidence)
 
     return f"""
       <div class="screen__head" aria-label="AI Governance posture">
@@ -69,8 +68,7 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
           <span class="eyebrow">{C.glossary("AI oversight", key="ai_governance")}</span>
           <h1>{escape(headline)}</h1>
           <p>
-            {dots}
-            <span class="ai-c mono">&nbsp;{confidence_text}</span>
+            {confidence_html}
             &nbsp;·&nbsp;
             The AI explains, summarizes, and recommends. It never trades or changes anything on its own.
           </p>

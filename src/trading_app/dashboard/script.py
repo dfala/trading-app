@@ -689,8 +689,117 @@ _SCRIPT = """
       button.addEventListener('click', () => sendOperatorControl(button.dataset.controlAction));
     });
 
+    // -----------------------------------------------------------------
+    // Plain / Technical vocabulary toggle (Phase B1)
+    // -----------------------------------------------------------------
+    function setVocab(vocab) {
+      const value = vocab === 'technical' ? 'technical' : 'plain';
+      document.documentElement.dataset.vocab = value;
+      try { window.localStorage.setItem('dashVocab', value); } catch (_e) { /* private mode */ }
+      document.querySelectorAll('[data-vocab-set]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', btn.dataset.vocabSet === value ? 'true' : 'false');
+      });
+    }
+    function wireVocabToggle() {
+      let stored = 'plain';
+      try { stored = window.localStorage.getItem('dashVocab') || 'plain'; } catch (_e) { /* ignore */ }
+      setVocab(stored);
+      document.querySelectorAll('[data-vocab-set]').forEach((btn) => {
+        btn.addEventListener('click', () => setVocab(btn.dataset.vocabSet));
+      });
+    }
+
+    // -----------------------------------------------------------------
+    // First-time tour (Phase B2)
+    // -----------------------------------------------------------------
+    let __tourStep = 0;
+    function tourCards() { return Array.from(document.querySelectorAll('[data-tour-step]')); }
+    function clearSpotlight() {
+      document.querySelectorAll('[data-tour-spotlight]').forEach((el) => {
+        delete el.dataset.tourSpotlight;
+      });
+    }
+    function positionTourCard(card, target) {
+      // Pin the card to viewport-bottom on the same horizontal half as the
+      // target. Keeps it visible regardless of scroll position.
+      const rect = target.getBoundingClientRect();
+      const onLeftHalf = rect.left + rect.width / 2 < window.innerWidth / 2;
+      card.style.bottom = '24px';
+      card.style.top = 'auto';
+      if (onLeftHalf) { card.style.left = '24px'; card.style.right = 'auto'; }
+      else { card.style.right = '24px'; card.style.left = 'auto'; }
+    }
+    function showTourStep(index) {
+      const cards = tourCards();
+      if (!cards.length) return;
+      clearSpotlight();
+      cards.forEach((c) => { c.hidden = true; });
+      const card = cards[index];
+      if (!card) return endTour();
+      const selector = card.dataset.tourTarget;
+      const target = selector ? document.querySelector(selector) : null;
+      if (target) {
+        target.dataset.tourSpotlight = '1';
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        positionTourCard(card, target);
+      }
+      card.hidden = false;
+      __tourStep = index;
+    }
+    function beginTour() {
+      // Always start on Home so the hero target is on screen.
+      if (window.location.hash !== '#home') window.location.hash = '#home';
+      const wrap = document.querySelector('[data-tour]');
+      if (!wrap) return;
+      wrap.hidden = false;
+      wrap.setAttribute('aria-hidden', 'false');
+      showTourStep(0);
+    }
+    function endTour() {
+      const wrap = document.querySelector('[data-tour]');
+      clearSpotlight();
+      if (wrap) {
+        wrap.hidden = true;
+        wrap.setAttribute('aria-hidden', 'true');
+        tourCards().forEach((c) => { c.hidden = true; });
+      }
+      try { window.localStorage.setItem('dashTourSeen', '1'); } catch (_e) { /* ignore */ }
+    }
+    function wireTour() {
+      document.querySelectorAll('[data-tour-next]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (__tourStep + 1 >= tourCards().length) endTour();
+          else showTourStep(__tourStep + 1);
+        });
+      });
+      document.querySelectorAll('[data-tour-skip]').forEach((btn) => {
+        btn.addEventListener('click', endTour);
+      });
+      document.addEventListener('keydown', (event) => {
+        const wrap = document.querySelector('[data-tour]');
+        if (!wrap || wrap.hidden) return;
+        if (event.key === 'Escape') endTour();
+        else if (event.key === 'ArrowRight' || event.key === 'Enter') {
+          if (__tourStep + 1 >= tourCards().length) endTour();
+          else showTourStep(__tourStep + 1);
+        }
+      });
+      document.querySelectorAll('[data-tour-start]').forEach((btn) => {
+        btn.addEventListener('click', beginTour);
+      });
+      // Auto-start for first-time users.
+      let seen = '';
+      try { seen = window.localStorage.getItem('dashTourSeen') || ''; } catch (_e) { /* ignore */ }
+      if (!seen) {
+        // Wait one tick so layout is settled.
+        window.setTimeout(beginTour, 200);
+      }
+    }
+
     wireNav();
     wirePeriods();
+    wireVocabToggle();
+    wireTour();
     refreshDashboardSnapshot();
     window.setInterval(refreshDashboardSnapshot, 5000);
   </script>"""

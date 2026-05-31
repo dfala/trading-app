@@ -78,6 +78,7 @@ def render_dashboard_html(
       </main>
     </div>
   </div>
+  {C.tour()}
 {body_script}
 </body>
 </html>

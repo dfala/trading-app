@@ -29,6 +29,7 @@ def render(snapshot: OperatorDashboardSnapshot) -> str:
       </div>
 
       {_hero(snapshot)}
+      {_today_summary(snapshot)}
       {_stat_row(snapshot)}
 
       <div class="grid-2-1">
@@ -68,7 +69,7 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
       <section class="hero" aria-label="Paper Portfolio">
         <div class="hero__lead">
           <span class="hero__label">{C.glossary("Your portfolio", key="paper_portfolio")}</span>
-          <div class="hero__value" data-field="estimated-equity">{equity}</div>
+          <div class="hero__value" data-field="estimated-equity" data-tour-anchor="hero">{equity}</div>
           <div class="hero__delta">
             <span class="{delta_class}">{delta_text}</span>
             <span class="delta-divider">·</span>
@@ -87,6 +88,120 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
           <button class="period" data-period="ALL" aria-pressed="false">ALL</button>
         </div>
       </section>"""
+
+
+# ---------------------------------------------------------------------------
+# "What happened today?" — beginner orientation card (Phase B3)
+# ---------------------------------------------------------------------------
+
+
+def _today_summary(snapshot: OperatorDashboardSnapshot) -> str:
+    """Three plain-English bullets that orient a beginner to today's activity.
+
+    Power users skim past it. Beginners read this first and discover the rest
+    of the dashboard with context. Skipped entirely on the technical-vocab
+    setting so it doesn't add noise for power users.
+    """
+
+    explanations = snapshot.daily_report.trade_explanations
+    reviewed = len(explanations)
+    filled = [e for e in explanations if e.status.value == "FILLED"]
+    rejected = [e for e in explanations if e.status.value == "REJECTED"]
+
+    # Bullet 1 — what got looked at
+    if reviewed == 0:
+        bullet_reviewed = "No trades were considered yet today. Strategies act at the daily close."
+    elif reviewed == 1:
+        bullet_reviewed = "We reviewed 1 possible trade today."
+    else:
+        bullet_reviewed = f"We reviewed {reviewed} possible trades today."
+
+    # Bullet 2 — what went through and what didn't
+    filled_text = ""
+    if filled:
+        details = ", ".join(
+            f"{e.symbol} {e.side.value.lower()} ×{_extract_qty(e)}"
+            for e in filled[:3]
+        )
+        more = f" (and {len(filled) - 3} more)" if len(filled) > 3 else ""
+        filled_text = (
+            f"{len(filled)} {'was' if len(filled) == 1 else 'were'} placed ({details}{more})."
+        )
+    rejected_text = ""
+    if rejected:
+        reasons = sorted({_rejection_reason(e) for e in rejected})
+        reasons_text = ", ".join(reasons)
+        rejected_text = (
+            f"{len(rejected)} {'was' if len(rejected) == 1 else 'were'} blocked by {reasons_text}."
+        )
+    if filled_text and rejected_text:
+        bullet_activity = f"{filled_text} {rejected_text}"
+    elif filled_text:
+        bullet_activity = filled_text
+    elif rejected_text:
+        bullet_activity = rejected_text
+    elif reviewed:
+        bullet_activity = "Nothing was placed and nothing was blocked."
+    else:
+        bullet_activity = "No orders sent to the broker yet."
+
+    # Bullet 3 — what the AI is up to
+    nightly = snapshot.nightly_learning
+    if nightly is None:
+        bullet_ai = (
+            "The AI hasn't published a memo yet today — it's still gathering evidence."
+        )
+    elif not nightly.recommendations:
+        bullet_ai = (
+            "The AI didn't ask to change anything today — it's still gathering evidence."
+        )
+    else:
+        n = len(nightly.recommendations)
+        bullet_ai = (
+            f"The AI flagged {n} candidate {'model' if n == 1 else 'models'} for your review. "
+            "Nothing changes without your approval."
+        )
+
+    bullets_html = (
+        '<ul class="today-bullets">'
+        f'<li><span class="today-bullets__dot"></span>{escape(bullet_reviewed)}</li>'
+        f'<li><span class="today-bullets__dot"></span>{escape(bullet_activity)}</li>'
+        f'<li><span class="today-bullets__dot"></span>{escape(bullet_ai)}</li>'
+        "</ul>"
+    )
+
+    return C.surface(
+        eyebrow="What happened today",
+        title="A plain-English summary",
+        body_html=bullets_html,
+        pill_html=C.pill("for beginners", tone="ai"),
+        extra_class="surface--today hide-in-tech",
+    )
+
+
+def _extract_qty(explanation) -> str:
+    """Best-effort quantity extractor for the today bullets."""
+
+    for attr in ("quantity", "qty", "size"):
+        value = getattr(explanation, attr, None)
+        if value is not None:
+            return str(value)
+    return ""
+
+
+def _rejection_reason(explanation) -> str:
+    """Map a rejected explanation onto plain-English reason text."""
+
+    rule = getattr(explanation, "rule", None) or getattr(explanation, "rule_name", None)
+    rule_value = getattr(rule, "value", rule) if rule is not None else None
+    rewrites = {
+        "MAX_ORDERS_PER_DAY": "your daily order limit",
+    }
+    if rule_value in rewrites:
+        return rewrites[rule_value]
+    if rule_value:
+        return f"a safety rule ({rule_value})"
+    return "a safety rule"
 
 
 # ---------------------------------------------------------------------------
@@ -182,8 +297,7 @@ def _ai_summary(snapshot: OperatorDashboardSnapshot) -> str:
         confidence = nightly.recommendations[0].confidence
     else:
         confidence = None
-    dots = C.confidence_dots(confidence)
-    confidence_text = f"{confidence:.2f}" if confidence is not None else "—"
+    confidence_html = C.confidence(confidence)
     body = f"""
       <div class="memo">
         {summary}
@@ -192,7 +306,7 @@ def _ai_summary(snapshot: OperatorDashboardSnapshot) -> str:
       <div class="k-list">
         <div class="k-row">
           <span>Confidence</span>
-          <strong data-numeric="1">{dots} <span class="ai-c">{confidence_text}</span></strong>
+          <strong>{confidence_html}</strong>
         </div>
         <div class="k-row">
           <span>Authority</span>

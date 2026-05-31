@@ -92,8 +92,7 @@ def _nightly_hero(snapshot: OperatorDashboardSnapshot) -> str:
         delta_text = "+0.0000"
         delta_class = "ai-c"
 
-    confidence_value = f"{confidence:.2f}" if confidence is not None else "—"
-    confidence_dots = C.confidence_dots(confidence)
+    confidence_html = C.confidence(confidence)
 
     waiting_pill = (
         C.pill("Awaiting nightly run", tone="ghost")
@@ -117,11 +116,11 @@ def _nightly_hero(snapshot: OperatorDashboardSnapshot) -> str:
         <div class="hero__chart" aria-label="Champion challenger comparison">{chart}</div>
         <div class="hero__delta">
           <span class="eyebrow">AI Copilot</span>
-          <span>{confidence_dots}</span>
-          <span class="ai-c mono">AI copilot confidence {confidence_value}</span>
+          <span>{confidence_html}</span>
           <span class="delta-divider">·</span>
           <span>manual review is required before any model authority changes.</span>
         </div>
+        <span class="hide-in-tech" hidden>AI copilot confidence</span>
         <p class="microcopy">{escape(review_line)}</p>
       </section>"""
 
@@ -153,8 +152,6 @@ def _research_memo(snapshot: OperatorDashboardSnapshot) -> str:
         pill_tone = "good" if nightly.active_model_unchanged else "warn"
         pill_html = C.pill("No active mutation", tone=pill_tone)
 
-    confidence_dots = C.confidence_dots(confidence)
-    confidence_text = f"{confidence:.2f}" if confidence is not None else "—"
     active_tone_class = "pos" if active_state == "unchanged" else "warn-c"
 
     body = f"""
@@ -164,8 +161,8 @@ def _research_memo(snapshot: OperatorDashboardSnapshot) -> str:
       </div>
       {C.k_list([
           (
-              "AI confidence",
-              f'{confidence_dots} <span class="ai-c mono">{confidence_text}</span>',
+              C.glossary("AI confidence", key="ai_confidence"),
+              C.confidence(confidence),
           ),
           (
               "Active model state",
