@@ -2214,6 +2214,8 @@ def _dashboard_demo_provenance_markers(
 
 
 def _collect_demo_markers(value, path: str = "dashboard") -> list[str]:
+    if _is_dashboard_audit_artifact_path(path):
+        return []
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
@@ -2234,6 +2236,11 @@ def _collect_demo_markers(value, path: str = "dashboard") -> list[str]:
 def _contains_demo_provenance(value: str) -> bool:
     normalized = value.casefold()
     return "demo" in normalized or "fixture" in normalized or "mock" in normalized
+
+
+def _is_dashboard_audit_artifact_path(path: str) -> bool:
+    """Ignore embedded audit reports when scanning dashboard runtime provenance."""
+    return path.startswith(("dashboard.completion_audit", "dashboard.final_acceptance"))
 
 
 if __name__ == "__main__":

@@ -407,6 +407,26 @@ def test_completion_audit_rejects_dashboard_demo_provenance(tmp_path) -> None:
     assert any("demo_provenance=" in item for item in by_id["FR-05"].evidence)
 
 
+def test_completion_audit_ignores_embedded_audit_requirement_text_for_demo_scan(
+    tmp_path,
+) -> None:
+    store = _persist_complete_evidence(tmp_path)
+    initial = RuntimeCompletionAuditor(output_dir=tmp_path).audit(as_of=NOW)
+    dashboard = _read_dashboard_snapshot(tmp_path)
+    store.persist_dashboard_snapshot(
+        dashboard.model_copy(update={"completion_audit": initial})
+    )
+
+    report = RuntimeCompletionAuditor(output_dir=tmp_path).audit(as_of=NOW)
+    by_id = {item.id: item for item in report.requirements}
+
+    assert by_id["FR-05"].status == FunctionalRequirementStatus.PROVEN
+    assert not any(
+        item.startswith("demo_provenance=dashboard.completion_audit")
+        for item in by_id["FR-05"].evidence
+    )
+
+
 def test_completion_audit_requires_operations_readiness_audit(tmp_path) -> None:
     missing_dir = tmp_path / "missing"
     failed_dir = tmp_path / "failed"

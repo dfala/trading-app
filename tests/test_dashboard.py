@@ -53,6 +53,7 @@ def test_dashboard_html_renders_required_sections_and_visuals() -> None:
     html = render_dashboard_html(build_demo_dashboard_snapshot())
 
     assert "Operator Dashboard" in html
+    assert "Paper Command Center" in html
     assert "Paper Portfolio" in html
     assert "Paper Boundary" in html
     assert "Latest Prices" in html
@@ -129,7 +130,9 @@ def test_dashboard_html_renders_required_sections_and_visuals() -> None:
     assert "data-active-strategy-failure-list" in html
     assert "data-active-strategy-ai-role-list" in html
     assert "Daily close only" in html
+    assert "Strategy authority remains schedule-bound" in html
     assert "$0 real capital" in html
+    assert "overflow-wrap: anywhere" in html
     assert html.count("<svg") >= 2
 
 

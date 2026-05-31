@@ -64,7 +64,7 @@ class AlpacaPaperRuntimeValidation:
     ) -> None:
         self.config = config
         self.env = env
-        self.runtime_factory = runtime_factory or AlwaysOnPaperRuntime.from_alpaca_env
+        self.runtime_factory = runtime_factory or _alpaca_runtime_factory
         self.persistence_store = persistence_store or RuntimePersistenceStore(
             config.runtime_config.output_dir
         )
@@ -530,6 +530,12 @@ def write_validation_markdown_report(
     path = directory / f"{report.id}.md"
     path.write_text(render_validation_markdown(report), encoding="utf-8")
     return path
+
+
+def _alpaca_runtime_factory(
+    config: AlwaysOnPaperRuntimeConfig,
+) -> AlwaysOnPaperRuntime:
+    return AlwaysOnPaperRuntime.from_alpaca_env(config=config)
 
 
 def main(argv: list[str] | None = None) -> int:

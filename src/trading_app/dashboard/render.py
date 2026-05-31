@@ -44,6 +44,8 @@ def render_dashboard_html(
   </header>
 
   <main>
+    {_command_center(snapshot)}
+
     <section class="metrics-grid" aria-label="Portfolio metrics">
       {_metric_cards(snapshot)}
     </section>
@@ -246,6 +248,46 @@ def _metric_cards(snapshot: OperatorDashboardSnapshot) -> str:
       </article>"""
         for metric in snapshot.metrics
     )
+
+
+def _command_center(snapshot: OperatorDashboardSnapshot) -> str:
+    runtime = snapshot.runtime_state
+    cycle = getattr(runtime, "last_cycle", None) if runtime else None
+    status = _enum_value(getattr(runtime, "status", None), "standing by")
+    latest = _latest_prices(snapshot)
+    broker_status = _broker_connection_status(snapshot)
+    next_gate = "Daily close only"
+    generated_at = snapshot.generated_at.isoformat()
+    return f"""
+    <section class="command-center" aria-label="Paper trading command center">
+      <div class="command-copy">
+        <p class="eyebrow">Paper Command Center</p>
+        <h2>{escape(snapshot.mode)}</h2>
+        <p class="summary">Live-money actions are disabled. Strategy authority remains schedule-bound.</p>
+      </div>
+      <div class="command-grid">
+        <div class="command-tile {escape(_status_tone(status))}">
+          <span class="label">Runtime</span>
+          <strong>{escape(status)}</strong>
+          <small>{escape(generated_at)}</small>
+        </div>
+        <div class="command-tile {escape(_connection_tone(broker_status))}">
+          <span class="label">Broker</span>
+          <strong>{escape(snapshot.broker)}</strong>
+          <small>{escape(broker_status)}</small>
+        </div>
+        <div class="command-tile {escape(_price_tone(latest["status"]))}">
+          <span class="label">Market data</span>
+          <strong>{escape(latest["feed"])}</strong>
+          <small>{escape(latest["status"])}</small>
+        </div>
+        <div class="command-tile info">
+          <span class="label">Trading gate</span>
+          <strong>{escape(next_gate)}</strong>
+          <small>{getattr(cycle, "orders_submitted", 0)} order(s) this cycle</small>
+        </div>
+      </div>
+    </section>"""
 
 
 def _model_cards(snapshot: OperatorDashboardSnapshot) -> str:
@@ -1228,6 +1270,31 @@ def _health_tone(status: str) -> str:
     return "good"
 
 
+def _status_tone(status: str) -> str:
+    normalized = status.casefold()
+    if normalized in {"blocked", "stopped", "critical", "failed"}:
+        return "danger"
+    if normalized in {"degraded", "warning", "standing by", "awaiting"}:
+        return "warn"
+    return "good"
+
+
+def _connection_tone(status: str) -> str:
+    if status in {"connected", "synced", "clean"}:
+        return "good"
+    if status in {"degraded", "awaiting"}:
+        return "warn"
+    return "danger"
+
+
+def _price_tone(status: str) -> str:
+    if status == "fresh":
+        return "good"
+    if status == "missing":
+        return "danger"
+    return "warn"
+
+
 def _interactive_script() -> str:
     return """
   <script>
@@ -1832,10 +1899,20 @@ _CSS = """
   --amber: #ffcf5a;
   --magenta: #ff4fd8;
   --red: #ff5d73;
+  --graphite: #080b0e;
+  --panel: rgba(11, 16, 20, 0.94);
+  --panel-strong: rgba(14, 21, 27, 0.98);
+  --line-soft: rgba(134, 154, 146, 0.18);
+  --shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--bg);
 }
 
 body {
@@ -1843,12 +1920,26 @@ body {
   min-height: 100vh;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
   background:
-    linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(56, 214, 255, 0.08), transparent 300px),
+    linear-gradient(rgba(255,255,255,0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
     var(--bg);
   background-size: 34px 34px;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--green), var(--cyan), var(--amber));
+  box-shadow: 0 0 22px rgba(56, 214, 255, 0.35);
+  z-index: 10;
+  pointer-events: none;
 }
 
 .topbar {
@@ -1857,8 +1948,9 @@ body {
   justify-content: space-between;
   gap: 24px;
   padding: 22px clamp(18px, 4vw, 48px);
-  border-bottom: 1px solid var(--line);
-  background: rgba(5, 7, 10, 0.92);
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(5, 7, 10, 0.88);
+  backdrop-filter: blur(18px);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -1884,18 +1976,23 @@ p {
 h1 {
   font-size: clamp(28px, 4vw, 48px);
   font-weight: 720;
+  line-height: 1;
 }
 
 h2 {
   font-size: clamp(20px, 2vw, 30px);
   font-weight: 700;
+  line-height: 1.08;
 }
 
 main {
   padding: 22px clamp(18px, 4vw, 48px) 40px;
+  display: grid;
+  gap: 16px;
 }
 
 .status-strip,
+.command-grid,
 .metrics-grid,
 .dashboard-grid,
 .split-list,
@@ -1910,19 +2007,23 @@ main {
 
 .status-strip {
   grid-template-columns: repeat(3, max-content);
+  align-items: center;
 }
 
 .status-pill,
 .chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 30px;
   padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid var(--line);
   font-size: 12px;
+  font-weight: 720;
   color: var(--text);
   background: var(--surface-2);
+  white-space: nowrap;
 }
 
 .paper,
@@ -1954,7 +2055,6 @@ main {
 
 .metrics-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 16px;
 }
 
 .metric-card,
@@ -1962,18 +2062,33 @@ main {
 .model-card {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(11, 16, 20, 0.94);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .metric-card {
+  position: relative;
+  overflow: hidden;
   display: grid;
   min-height: 112px;
   padding: 16px;
   gap: 8px;
 }
 
+.metric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: currentColor;
+  opacity: 0.78;
+}
+
 .metric-card strong {
   font-size: clamp(24px, 3vw, 36px);
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .metric-card.good {
@@ -1989,13 +2104,29 @@ main {
 }
 
 .dashboard-grid {
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.8fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: start;
 }
 
 .panel {
+  position: relative;
+  overflow: hidden;
+  grid-column: span 4;
   padding: 18px;
   min-height: 220px;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 230, 118, 0.45), rgba(56, 214, 255, 0.22), transparent);
+  opacity: 0.75;
+}
+
+.portfolio-panel {
+  grid-column: span 8;
 }
 
 .wide-panel {
@@ -2050,7 +2181,8 @@ circle {
 .memo {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface-2);
+  background: rgba(16, 23, 29, 0.92);
+  min-width: 0;
 }
 
 .split-list div {
@@ -2090,16 +2222,19 @@ circle {
 
 .clean-list li,
 .score-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(96px, 0.52fr) minmax(0, 1fr);
   gap: 12px;
   color: var(--muted);
+  align-items: baseline;
 }
 
 .clean-list strong,
 .score-row b {
   color: var(--text);
   text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .model-grid {
@@ -2164,18 +2299,27 @@ circle {
 .table-row,
 .event-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 12px;
 }
 
 .event-row {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto);
 }
 
 .event-row small {
   grid-column: 1 / -1;
+}
+
+.table-row strong,
+.table-row em,
+.event-row strong,
+.event-row span,
+.event-row small {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .warn-border {
@@ -2195,14 +2339,22 @@ circle {
   border: 1px solid rgba(56, 214, 255, 0.45);
   border-radius: 8px;
   color: var(--text);
-  background: #10171d;
+  background: linear-gradient(180deg, rgba(18, 30, 38, 0.96), rgba(11, 16, 20, 0.96));
   font: inherit;
+  font-size: 13px;
+  font-weight: 720;
   cursor: pointer;
+  letter-spacing: 0;
 }
 
 .control-button:hover:not(:disabled) {
   border-color: var(--cyan);
   box-shadow: 0 0 0 1px rgba(56, 214, 255, 0.18);
+}
+
+.control-button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .control-button:disabled {
@@ -2230,11 +2382,13 @@ circle {
 
 .price-tape {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
 }
 
 .price-pill {
+  position: relative;
+  overflow: hidden;
   min-height: 82px;
   display: grid;
   gap: 6px;
@@ -2246,6 +2400,8 @@ circle {
 
 .price-pill strong {
   font-size: 22px;
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .price-pill.good {
@@ -2266,20 +2422,82 @@ circle {
 .footer {
   padding: 22px clamp(18px, 4vw, 48px);
   color: var(--muted);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-soft);
 }
 
 .empty {
   color: var(--muted);
 }
 
+.command-center {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.45fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(0, 230, 118, 0.08), transparent 36%),
+    linear-gradient(90deg, rgba(56, 214, 255, 0.08), transparent 56%),
+    rgba(8, 11, 14, 0.96);
+  box-shadow: var(--shadow);
+}
+
+.command-copy {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.command-copy h2 {
+  font-size: clamp(26px, 3vw, 42px);
+}
+
+.command-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.command-tile {
+  display: grid;
+  align-content: space-between;
+  min-height: 116px;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(16, 23, 29, 0.82);
+  min-width: 0;
+}
+
+.command-tile strong {
+  font-size: clamp(18px, 2vw, 26px);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.command-tile small {
+  overflow-wrap: anywhere;
+}
+
+@media (hover: hover) {
+  .panel:hover,
+  .metric-card:hover,
+  .command-tile:hover {
+    border-color: rgba(56, 214, 255, 0.42);
+  }
+}
+
 @media (max-width: 900px) {
   .topbar,
-  .panel-header {
+  .panel-header,
+  .command-center {
     display: grid;
   }
 
   .status-strip,
+  .command-grid,
   .metrics-grid,
     .dashboard-grid,
     .split-list,
@@ -2290,6 +2508,42 @@ circle {
     .control-grid,
     .price-tape {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid > .panel,
+  .portfolio-panel,
+  .wide-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    padding-inline: 14px;
+  }
+
+  main {
+    padding-inline: 14px;
+  }
+
+  .status-pill,
+  .chip,
+  .control-button {
+    width: 100%;
+  }
+
+  .clean-list li,
+  .score-row,
+  .table-row,
+  .event-row,
+  .active-model-panel .clean-list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .clean-list strong,
+  .score-row b {
+    text-align: left;
   }
 }
 """

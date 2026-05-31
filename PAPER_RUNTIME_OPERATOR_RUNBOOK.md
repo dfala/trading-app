@@ -1,6 +1,6 @@
 # Alpaca Paper Runtime Operator Runbook
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 This runbook is for Alpaca paper trading only. It does not authorize live-money trading.
 
@@ -151,6 +151,140 @@ python -m trading_app.runtime.validation --include-scheduled-order-check
 ```
 
 Use this only when paper orders are acceptable and the current market schedule is understood.
+
+## Sunday And Market-Closed Validation
+
+When U.S. markets are closed, the operator can still prove the runtime is safe
+and connected. The goal is not a green functional-completion report; the goal is
+evidence that the app stays paper-only, reaches Alpaca paper, blocks trading on
+stale data, and records review artifacts.
+
+From the project root, load the local `.env` file into the current shell:
+
+```bash
+set -a
+. ./.env
+set +a
+```
+
+Run the Sunday-safe checks:
+
+```bash
+python -m trading_app.runtime.ops --audit --output-dir data/runtime
+python -m trading_app.runtime.lifecycle --output-dir data/runtime
+python -m trading_app.runtime.dashboard_visual --output-dir data/runtime
+python -m trading_app.runtime.schedule --output-dir data/runtime
+python -m trading_app.runtime.guardrails --output-dir data/runtime
+python -m trading_app.runtime.fills --output-dir data/runtime
+python -m trading_app.runtime.data_quality --output-dir data/runtime
+python -m trading_app.runtime.governance --output-dir data/runtime
+python -m trading_app.runtime.broker_history \
+  --output-dir data/runtime \
+  --symbols XLB,XLC,XLE,XLF,XLI,XLK,XLP,XLRE,XLU,XLV,XLY,SPY \
+  --limit 100
+python -m trading_app.runtime.validation --output-dir data/runtime
+python -m trading_app.runtime.security --output-dir data/runtime
+python -m trading_app.runtime.completion --output-dir data/runtime
+```
+
+Expected Sunday result:
+
+- Operations, lifecycle, dashboard visual, schedule, order-guardrail, fill-sync,
+  data-quality, model-governance, broker-history, and secret-scan audits should
+  pass.
+- Validation may exit with code `1` because latest prices are stale while the
+  market is closed. That is acceptable only when the report still shows broker
+  sync passed, dashboard snapshot serialized, zero orders submitted, and stale
+  prices blocked new paper orders.
+- Completion audit should remain incomplete until market-hours validation,
+  scheduled paper-order evidence, real fill/restart evidence, after-close daily
+  report, nightly learning, statement reconciliation, full-day soak,
+  credentialed-session proof, evidence bundle, operator signoff, and final
+  acceptance are complete.
+
+For Sunday May 31, 2026, Alpaca clock should show the next regular U.S. market
+open as Monday June 1, 2026 at 09:30 ET and next close as Monday June 1, 2026 at
+16:00 ET. Do not try to force a Sunday order to make completion green.
+
+## Monday Market-Hours Procedure
+
+Use this procedure on Monday June 1, 2026. It is the first real market-hours
+proof step after Sunday setup.
+
+Before 09:30 ET:
+
+```bash
+set -a
+. ./.env
+set +a
+python -m trading_app.runtime.preflight --output-dir data/runtime --json
+python -m trading_app.runtime.dry_run --output-dir data/runtime --json
+python -m trading_app.runtime.security --output-dir data/runtime --json
+```
+
+Success criteria before market open:
+
+- Preflight can start.
+- Dry run reaches Alpaca paper, syncs broker state, serializes dashboard state,
+  and submits zero orders.
+- Any stale-price warning is understood as pre-market/off-hours behavior.
+- Secret scan reports zero findings.
+
+After 09:30 ET, while the regular U.S. session is open:
+
+```bash
+python -m trading_app.runtime.validation --output-dir data/runtime --json
+python -m trading_app.runtime.broker_history \
+  --output-dir data/runtime \
+  --symbols XLB,XLC,XLE,XLF,XLI,XLK,XLP,XLRE,XLU,XLV,XLY,SPY \
+  --limit 100 \
+  --json
+```
+
+Market-hours success criteria:
+
+- Latest prices refresh from Alpaca and record `latest_price_source=alpaca`.
+- Broker sync records provider `alpaca-paper`.
+- Dashboard snapshot serializes from the runtime provider.
+- Monitor-only validation submits zero paper orders.
+- No live-money, margin, short, option, crypto, or non-U.S. instrument path is
+  used.
+- If IEX data is delayed or stale, orders remain blocked and the warning remains
+  visible. Do not override that guardrail.
+
+To start the supervised always-on runtime:
+
+```bash
+python -m trading_app.runtime.run_alpaca_paper --monitor-only-dry-run-first
+```
+
+Keep the dashboard local at:
+
+```text
+http://127.0.0.1:8765
+```
+
+After 16:00 ET, wait for the regular close path, daily report, and nightly
+learning evidence. Then run:
+
+```bash
+python -m trading_app.runtime.review --output-dir data/runtime
+python -m trading_app.runtime.completion --output-dir data/runtime
+python -m trading_app.runtime.evidence --output-dir data/runtime
+python -m trading_app.runtime.security --output-dir data/runtime
+```
+
+Post-close success criteria:
+
+- Daily report is generated after the regular market close.
+- Nightly learning runs after the daily report and remains recommendation-only.
+- Broker order history matches local submissions and fills.
+- Broker statement reconciliation is clean.
+- Dashboard consistency and visual-readiness pass.
+- Completion audit has no `failed` or `missing` items. Any remaining
+  `external_required` item must be tied to a known unperformed step, not a hidden
+  error.
+- No secrets are found in runtime artifacts.
 
 To run a monitor-only soak:
 
