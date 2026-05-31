@@ -1,0 +1,49 @@
+[project]
+name = "trading-app"
+version = "0.1.0"
+description = "A disciplined U.S. stock trading research app."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alpaca-py>=0.43.0",
+    "duckdb>=1.4.0",
+    "pandas>=2.3.0",
+    "pydantic>=2.12.0",
+    "pyarrow>=22.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["src", "tests"]
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    ".uv-cache",
+    ".uv-tools",
+    "data",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

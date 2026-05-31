@@ -1,0 +1,10 @@
+{
+  "mcp": {
+    "servers": {
+      "alpaca-paper-research": {
+        "type": "stdio",
+        "command": "/Users/dfala/Documents/code/trading/scripts/run_alpaca_mcp.sh"
+      }
+    }
+  }
+}

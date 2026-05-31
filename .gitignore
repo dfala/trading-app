@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.uv-cache/
+.uv-tools/
+data/
+.env
+.env.local
+.env.paper
+.env.*.local
+*.local.env
+*.py[cod]
+dist/
+build/
+*.egg-info/
