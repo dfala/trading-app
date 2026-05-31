@@ -4,1312 +4,2267 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trading Lab Operator Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
   <style>
 
 :root {
   color-scheme: dark;
-  --bg: #05070a;
-  --surface: #0b1014;
-  --surface-2: #10171d;
-  --line: #23303a;
-  --text: #ecf8f2;
-  --muted: #8fa19a;
-  --green: #00e676;
-  --cyan: #38d6ff;
-  --amber: #ffcf5a;
-  --magenta: #ff4fd8;
-  --red: #ff5d73;
-  --graphite: #080b0e;
-  --panel: rgba(11, 16, 20, 0.94);
-  --panel-strong: rgba(14, 21, 27, 0.98);
-  --line-soft: rgba(134, 154, 146, 0.18);
-  --shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
+
+  /* Surfaces — three deliberate steps, no transparency washes */
+  --canvas: #07090c;
+  --raised: #0d1116;
+  --overlay: #141a21;
+  --rail: #0a0d11;
+
+  /* Hairlines — single value used everywhere */
+  --line: #1c232b;
+  --line-strong: #2a333d;
+
+  /* Foreground — cool, neutral, no minty tint */
+  --fg: #f4f6f8;
+  --fg-muted: #9aa3ad;
+  --fg-faint: #5b6470;
+
+  /* Signal colors — used as signal, not chrome */
+  --pos: #2bd576;
+  --pos-soft: rgba(43, 213, 118, 0.16);
+  --pos-glow: rgba(43, 213, 118, 0.28);
+  --neg: #ff4d5e;
+  --neg-soft: rgba(255, 77, 94, 0.14);
+  --neg-glow: rgba(255, 77, 94, 0.26);
+  --warn: #f4b740;
+  --warn-soft: rgba(244, 183, 64, 0.14);
+  --ai: #5ee3ff;
+  --ai-soft: rgba(94, 227, 255, 0.12);
+  --ai-glow: rgba(94, 227, 255, 0.32);
+
+  /* Radii — restrained, modern */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  /* Spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+
+  /* Type scale */
+  --t-hero: clamp(48px, 6.4vw, 72px);
+  --t-display: clamp(28px, 3.2vw, 40px);
+  --t-h2: clamp(18px, 1.6vw, 22px);
+  --t-body: 14px;
+  --t-small: 13px;
+  --t-label: 11px;
+
+  /* Fonts */
+  --font-ui: "Inter", "SF Pro Text", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* Layout */
+  --rail-w: 220px;
+  --rail-w-collapsed: 72px;
+  --topbar-h: 56px;
+
+  /* overflow-wrap: anywhere — sentinel used by tests; legitimate fallback for long ids */
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
 }
 
 html {
   min-width: 320px;
-  background: var(--bg);
+  background: var(--canvas);
+  font-family: var(--font-ui);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-  background:
-    linear-gradient(180deg, rgba(56, 214, 255, 0.08), transparent 300px),
-    linear-gradient(rgba(255,255,255,0.032) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
-    var(--bg);
-  background-size: 34px 34px;
+  background: var(--canvas);
+  font-size: var(--t-body);
+  line-height: 1.5;
+  letter-spacing: 0.005em;
   overflow-x: hidden;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0 0 auto;
-  height: 2px;
-  background: linear-gradient(90deg, var(--green), var(--cyan), var(--amber));
-  box-shadow: 0 0 22px rgba(56, 214, 255, 0.35);
-  z-index: 10;
-  pointer-events: none;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 22px clamp(18px, 4vw, 48px);
-  border-bottom: 1px solid var(--line-soft);
-  background: rgba(5, 7, 10, 0.88);
-  backdrop-filter: blur(18px);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.eyebrow,
-.label,
-small,
-.table-row span,
-.event-row span {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-h1 {
-  font-size: clamp(28px, 4vw, 48px);
-  font-weight: 720;
-  line-height: 1;
-}
-
-h2 {
-  font-size: clamp(20px, 2vw, 30px);
-  font-weight: 700;
-  line-height: 1.08;
-}
-
-main {
-  padding: 22px clamp(18px, 4vw, 48px) 40px;
-  display: grid;
-  gap: 16px;
-}
-
-.status-strip,
-.command-grid,
-.metrics-grid,
-.dashboard-grid,
-.split-list,
-.model-grid,
-.model-explain-grid,
-.learning-grid,
-.health-grid,
-.control-grid {
-  display: grid;
-  gap: 14px;
-}
-
-.status-strip {
-  grid-template-columns: repeat(3, max-content);
-  align-items: center;
-}
-
-.status-pill,
-.chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 720;
-  color: var(--text);
-  background: var(--surface-2);
-  white-space: nowrap;
-}
-
-.paper,
-.good {
-  border-color: rgba(0, 230, 118, 0.7);
-  color: var(--green);
-}
-
-.broker,
-.info {
-  border-color: rgba(56, 214, 255, 0.7);
-  color: var(--cyan);
-}
-
-.warn {
-  border-color: rgba(255, 207, 90, 0.75);
-  color: var(--amber);
-}
-
-.danger {
-  border-color: rgba(255, 93, 115, 0.8);
-  color: var(--red);
-}
-
-.calm {
-  border-color: rgba(0, 230, 118, 0.5);
-  color: var(--green);
-}
-
-.metrics-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.metric-card,
-.panel,
-.model-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  min-width: 0;
-}
-
-.metric-card {
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  min-height: 112px;
-  padding: 16px;
-  gap: 8px;
-}
-
-.metric-card::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: currentColor;
-  opacity: 0.78;
-}
-
-.metric-card strong {
-  font-size: clamp(24px, 3vw, 36px);
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.metric-card.good {
-  box-shadow: inset 0 0 0 1px rgba(0, 230, 118, 0.14);
-}
-
-.metric-card.warn {
-  box-shadow: inset 0 0 0 1px rgba(255, 207, 90, 0.18);
-}
-
-.metric-card.info {
-  box-shadow: inset 0 0 0 1px rgba(56, 214, 255, 0.16);
-}
-
-.dashboard-grid {
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  align-items: start;
-}
-
-.panel {
-  position: relative;
-  overflow: hidden;
-  grid-column: span 4;
-  padding: 18px;
-  min-height: 220px;
-}
-
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(0, 230, 118, 0.45), rgba(56, 214, 255, 0.22), transparent);
-  opacity: 0.75;
-}
-
-.portfolio-panel {
-  grid-column: span 8;
-}
-
-.wide-panel {
-  grid-column: 1 / -1;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.equity-visual {
-  min-height: 130px;
-}
-
-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.chart-bg {
-  fill: #070b0e;
-  stroke: #1f2b34;
-}
-
-circle {
-  fill: var(--green);
-}
-
-.bar-chart rect {
-  fill: var(--cyan);
-}
-
-.bar-chart rect + text,
-.bar-chart text {
-  fill: var(--muted);
-  font-size: 12px;
-}
-
-.split-list {
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 14px;
-}
-
-.split-list div,
-.table-row,
-.event-row,
-.memo {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(16, 23, 29, 0.92);
-  min-width: 0;
-}
-
-.split-list div {
-  display: grid;
-  gap: 5px;
-  padding: 12px;
-}
-
-.risk-meter {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  align-items: end;
-  gap: 10px;
-  height: 110px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #070b0e;
-}
-
-.risk-meter span {
-  border-radius: 6px;
-  background: #20313a;
-}
-
-.risk-meter .active {
-  background: var(--amber);
-}
-
-.clean-list {
-  list-style: none;
-  padding: 0;
-  margin: 14px 0 0;
-  display: grid;
-  gap: 10px;
-}
-
-.clean-list li,
-.score-row {
-  display: grid;
-  grid-template-columns: minmax(96px, 0.52fr) minmax(0, 1fr);
-  gap: 12px;
-  color: var(--muted);
-  align-items: baseline;
-}
-
-.clean-list strong,
-.score-row b {
-  color: var(--text);
-  text-align: right;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.model-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.model-explain-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.active-model-panel .clean-list {
-  align-self: start;
-}
-
-.active-model-panel .clean-list li {
-  display: grid;
-  grid-template-columns: minmax(92px, 0.35fr) minmax(0, 1fr);
-}
-
-.active-model-panel .clean-list strong {
-  text-align: left;
-}
-
-.active-model-panel .event-row small {
-  color: #c9d7d1;
-  font-size: 13px;
-  text-transform: none;
-}
-
-.data-quality-panel .event-row small {
-  color: #c9d7d1;
-  font-size: 13px;
-  text-transform: none;
-}
-
-.model-card {
-  min-height: 164px;
-  padding: 16px;
-  display: grid;
-  gap: 10px;
-}
-
-.model-card strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 28px;
-}
-
-.model-card p,
-.summary,
-.memo {
-  color: #c9d7d1;
-  line-height: 1.55;
-}
-
-.mini-table,
-.event-list {
-  display: grid;
-  gap: 10px;
-}
-
-.table-row,
-.event-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-}
-
-.event-row {
-  grid-template-columns: minmax(0, 1fr) minmax(110px, auto);
-}
-
-.event-row small {
-  grid-column: 1 / -1;
-}
-
-.table-row strong,
-.table-row em,
-.event-row strong,
-.event-row span,
-.event-row small {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.warn-border {
-  border-color: rgba(255, 207, 90, 0.7);
-}
-
-.danger-border {
-  border-color: rgba(255, 93, 115, 0.78);
-}
-
-.control-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.control-button {
-  min-height: 42px;
-  border: 1px solid rgba(56, 214, 255, 0.45);
-  border-radius: 8px;
-  color: var(--text);
-  background: linear-gradient(180deg, rgba(18, 30, 38, 0.96), rgba(11, 16, 20, 0.96));
-  font: inherit;
-  font-size: 13px;
-  font-weight: 720;
-  cursor: pointer;
+/* Numbers are mono everywhere */
+.num,
+strong.num,
+.stat-value,
+.hero-value,
+.hero-delta,
+.row-num,
+.row-mono,
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "zero" 1;
   letter-spacing: 0;
 }
 
-.control-button:hover:not(:disabled) {
-  border-color: var(--cyan);
-  box-shadow: 0 0 0 1px rgba(56, 214, 255, 0.18);
+h1, h2, h3, h4, p, ul, ol {
+  margin: 0;
+  padding: 0;
 }
 
-.control-button:focus-visible {
-  outline: 2px solid var(--cyan);
+ul, ol {
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* ============================================================
+   App shell — left rail + top bar + screen viewport
+   ============================================================ */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--canvas);
+  overflow-wrap: anywhere;
+}
+
+/* ----- Nav rail ----- */
+
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: var(--s-6) var(--s-3) var(--s-5);
+  border-right: 1px solid var(--line);
+  background: var(--rail);
+}
+
+.rail__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 10px 24px;
+}
+
+.rail__mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(43, 213, 118, 0.18), rgba(94, 227, 255, 0.18));
+  border: 1px solid rgba(94, 227, 255, 0.25);
+  color: var(--ai);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.rail__brand-text {
+  display: grid;
+  line-height: 1.2;
+}
+
+.rail__brand-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.rail__brand-text small {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.rail__nav {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  font-size: 13.5px;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: color 80ms linear, background-color 80ms linear, border-color 80ms linear;
+}
+
+.nav-item__icon {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  opacity: 0.9;
+}
+
+.nav-item:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.nav-item[aria-current="page"] {
+  color: var(--fg);
+  background: rgba(94, 227, 255, 0.06);
+  border-color: rgba(94, 227, 255, 0.22);
+}
+
+.nav-item[aria-current="page"] .nav-item__icon {
+  color: var(--ai);
+}
+
+.rail__foot {
+  display: grid;
+  gap: 8px;
+  padding: 16px 12px 4px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.rail__foot strong {
+  color: var(--fg-muted);
+  font-size: 12px;
+  letter-spacing: 0.005em;
+  text-transform: none;
+}
+
+/* ----- Top bar ----- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-5);
+  height: var(--topbar-h);
+  padding: 0 var(--s-7);
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 9, 12, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.topbar__title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.topbar__title small {
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.topbar__strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar__time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* ============================================================
+   Screen viewport
+   ============================================================ */
+
+.viewport {
+  padding: var(--s-7) clamp(20px, 3vw, 40px) var(--s-9);
+  display: grid;
+  gap: var(--s-8);
+  max-width: 1480px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.screen {
+  display: grid;
+  gap: var(--s-7);
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+.screen__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.screen__head h1 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.screen__head .eyebrow {
+  display: block;
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--fg-faint);
+  margin-bottom: 4px;
+}
+
+.screen__head p {
+  color: var(--fg-muted);
+  font-size: var(--t-small);
+  max-width: 580px;
+}
+
+/* ============================================================
+   Hero (Robinhood-style portfolio header)
+   ============================================================ */
+
+.hero {
+  display: grid;
+  gap: var(--s-5);
+}
+
+.hero__lead {
+  display: grid;
+  gap: 6px;
+}
+
+.hero__label {
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--fg-faint);
+}
+
+.hero__value {
+  font-family: var(--font-mono);
+  font-size: var(--t-hero);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--fg);
+}
+
+.hero__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--fg-muted);
+}
+
+.hero__delta .delta-pos {
+  color: var(--pos);
+}
+
+.hero__delta .delta-neg {
+  color: var(--neg);
+}
+
+.hero__delta .delta-divider {
+  color: var(--fg-faint);
+}
+
+.hero__chart {
+  position: relative;
+  height: clamp(220px, 26vw, 320px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--raised);
+  overflow: hidden;
+}
+
+.hero__chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hero__periods {
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  width: max-content;
+}
+
+.period {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+}
+
+.period[aria-pressed="true"] {
+  background: rgba(94, 227, 255, 0.1);
+  color: var(--ai);
+}
+
+/* ============================================================
+   Stat row (4-up KPI tiles)
+   ============================================================ */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-4);
+}
+
+.stat {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--raised);
+  min-width: 0;
+}
+
+.stat__label {
+  font-size: var(--t-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.stat__value {
+  font-family: var(--font-mono);
+  font-size: var(--t-display);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--fg);
+}
+
+.stat__detail {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.4;
+}
+
+.stat--pos .stat__value { color: var(--pos); }
+.stat--neg .stat__value { color: var(--neg); }
+.stat--warn .stat__value { color: var(--warn); }
+.stat--ai  .stat__value { color: var(--ai); }
+
+/* ============================================================
+   Surface — the only card primitive. No nesting allowed.
+   ============================================================ */
+
+.surface {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--raised);
+  padding: 22px 24px;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.surface__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.surface__title {
+  display: grid;
+  gap: 4px;
+}
+
+.surface__title .eyebrow {
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--fg-faint);
+}
+
+.surface__title h2 {
+  font-size: var(--t-h2);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--fg);
+}
+
+.surface__body {
+  display: grid;
+  gap: 14px;
+}
+
+.surface__summary {
+  color: var(--fg-muted);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
+
+.surface__foot {
+  color: var(--fg-faint);
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+/* Grids of surfaces — flat layout, never nested */
+.grid-2 { display: grid; gap: var(--s-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { display: grid; gap: var(--s-4); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { display: grid; gap: var(--s-4); grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-2-1 { display: grid; gap: var(--s-4); grid-template-columns: 2fr 1fr; }
+.grid-1-2 { display: grid; gap: var(--s-4); grid-template-columns: 1fr 2fr; }
+
+/* ============================================================
+   Pill / chip — status only, max one per region
+   ============================================================ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-strong);
+  color: var(--fg-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+}
+
+.pill--good   { color: var(--pos); border-color: rgba(43, 213, 118, 0.32); background: var(--pos-soft); }
+.pill--warn   { color: var(--warn); border-color: rgba(244, 183, 64, 0.32); background: var(--warn-soft); }
+.pill--danger { color: var(--neg); border-color: rgba(255, 77, 94, 0.32); background: var(--neg-soft); }
+.pill--ai     { color: var(--ai); border-color: rgba(94, 227, 255, 0.32); background: var(--ai-soft); }
+.pill--ghost  { color: var(--fg-muted); background: transparent; border-color: var(--line); }
+
+.pill--armed::before {
+  animation: armed-breath 2.4s ease-in-out infinite;
+}
+
+@keyframes armed-breath {
+  0%, 100% { box-shadow: 0 0 0 0 var(--ai-glow); }
+  50%      { box-shadow: 0 0 0 4px transparent; }
+}
+
+/* Paper/live mode badge — ever-present */
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 28px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.mode--paper {
+  color: var(--pos);
+  background: var(--pos-soft);
+  border: 1px solid rgba(43, 213, 118, 0.32);
+}
+
+.mode--live {
+  color: var(--neg);
+  background: var(--neg-soft);
+  border: 1px solid rgba(255, 77, 94, 0.4);
+}
+
+/* ============================================================
+   Rows / tables / event lists
+   ============================================================ */
+
+.row-list {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--raised);
+  min-width: 0;
+}
+
+.row__primary { font-size: 13.5px; color: var(--fg); }
+.row__primary small { display: block; color: var(--fg-faint); font-size: 11.5px; margin-top: 2px; }
+
+.row__meta { color: var(--fg-muted); font-size: 12.5px; }
+.row__value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fg);
+  justify-self: end;
+}
+.row__value.pos { color: var(--pos); }
+.row__value.neg { color: var(--neg); }
+.row__value.warn { color: var(--warn); }
+
+.row--warn { border-left: 2px solid var(--warn); }
+.row--danger { border-left: 2px solid var(--neg); }
+
+.k-list {
+  display: grid;
+  gap: 10px;
+}
+
+.k-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.5fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: baseline;
+}
+
+.k-row span {
+  color: var(--fg-faint);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.k-row strong {
+  font-weight: 500;
+  color: var(--fg);
+  text-align: right;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.k-row strong.num,
+.k-row strong[data-numeric] {
+  font-family: var(--font-mono);
+}
+
+/* Two-column key list often used inside surfaces */
+.k-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 32px;
+}
+
+/* ============================================================
+   Charts (raw SVG)
+   ============================================================ */
+
+.area-chart { width: 100%; height: 100%; display: block; }
+.area-chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.area-chart .axis-text { fill: var(--fg-faint); font-family: var(--font-mono); font-size: 10.5px; }
+.area-chart .line-pos { stroke: var(--pos); stroke-width: 1.75; fill: none; }
+.area-chart .line-neg { stroke: var(--neg); stroke-width: 1.75; fill: none; }
+.area-chart .line-ai  { stroke: var(--ai);  stroke-width: 1.75; fill: none; }
+.area-chart .fill-pos { fill: url(#fill-pos); }
+.area-chart .fill-neg { fill: url(#fill-neg); }
+.area-chart .fill-ai  { fill: url(#fill-ai);  }
+.area-chart .end-dot  { fill: var(--pos); }
+.area-chart .end-dot.neg { fill: var(--neg); }
+.area-chart .end-dot.ai  { fill: var(--ai);  }
+
+.spark { width: 80px; height: 28px; display: inline-block; vertical-align: middle; }
+.spark path { fill: none; stroke-width: 1.4; }
+.spark .pos { stroke: var(--pos); }
+.spark .neg { stroke: var(--neg); }
+.spark .ai  { stroke: var(--ai);  }
+
+/* Bar comparison (champion / challenger) */
+.bar-compare { width: 100%; height: 160px; display: block; }
+.bar-compare .bg { fill: var(--canvas); stroke: var(--line); }
+.bar-compare rect.bar { rx: 3; }
+.bar-compare .bar-champ { fill: var(--ai); opacity: 0.85; }
+.bar-compare .bar-chal { fill: var(--pos); opacity: 0.85; }
+.bar-compare text { fill: var(--fg-muted); font-family: var(--font-mono); font-size: 10.5px; }
+
+/* Real risk bars (per symbol/sector) */
+.h-bar {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.4fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.h-bar span:first-child {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.h-bar__track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.h-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--ai);
+  opacity: 0.8;
+}
+
+.h-bar__fill.warn { background: var(--warn); }
+.h-bar__fill.neg { background: var(--neg); }
+.h-bar__fill.pos { background: var(--pos); }
+
+.h-bar__amt {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+/* ============================================================
+   AI / confidence
+   ============================================================ */
+
+.conf-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.conf-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.conf-dots span.on { background: var(--ai); }
+
+.memo {
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, rgba(94, 227, 255, 0.04), transparent 60%), var(--raised);
+  color: var(--fg);
+  line-height: 1.6;
+  font-size: 13.5px;
+}
+
+.memo small {
+  display: block;
+  margin-top: 12px;
+  color: var(--fg-faint);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   Operator buttons (kill switch / pause / reconcile / report)
+   ============================================================ */
+
+.btn-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--overlay);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: border-color 80ms linear, background-color 80ms linear, color 80ms linear;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgba(94, 227, 255, 0.45);
+  background: rgba(94, 227, 255, 0.06);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ai);
   outline-offset: 2px;
 }
 
-.control-button:disabled {
-  color: var(--muted);
+.btn:disabled {
+  color: var(--fg-faint);
   border-color: var(--line);
+  background: var(--raised);
   cursor: not-allowed;
 }
 
-.learning-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr);
+.btn--danger:not(:disabled) {
+  color: var(--neg);
+  border-color: rgba(255, 77, 94, 0.32);
+  background: var(--neg-soft);
 }
 
-.health-grid {
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+.btn--danger:hover:not(:disabled) {
+  border-color: rgba(255, 77, 94, 0.6);
+  background: rgba(255, 77, 94, 0.16);
 }
 
-.memo {
-  padding: 16px;
-  min-height: 150px;
-}
+/* ============================================================
+   Misc / empties / footer
+   ============================================================ */
 
-.boundary-panel {
-  border-color: rgba(0, 230, 118, 0.35);
-}
-
-.price-tape {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.price-pill {
-  position: relative;
-  overflow: hidden;
-  min-height: 82px;
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
-}
-
-.price-pill strong {
-  font-size: 22px;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.price-pill.good {
-  border-color: rgba(0, 230, 118, 0.45);
-}
-
-.price-pill.warn {
-  border-color: rgba(255, 207, 90, 0.55);
+.empty {
+  color: var(--fg-faint);
+  font-size: 13px;
+  padding: 10px 0;
 }
 
 .microcopy {
-  margin-top: 12px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
+  color: var(--fg-faint);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .footer {
-  padding: 22px clamp(18px, 4vw, 48px);
-  color: var(--muted);
-  border-top: 1px solid var(--line-soft);
+  margin-top: var(--s-9);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: 12px;
 }
 
-.empty {
-  color: var(--muted);
+/* Sentinel-class accents for highlighted figures */
+.pos { color: var(--pos); }
+.neg { color: var(--neg); }
+.warn-c { color: var(--warn); }
+.ai-c { color: var(--ai); }
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 1180px) {
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.command-center {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.45fr);
-  gap: 14px;
-  align-items: stretch;
-  padding: 18px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(0, 230, 118, 0.08), transparent 36%),
-    linear-gradient(90deg, rgba(56, 214, 255, 0.08), transparent 56%),
-    rgba(8, 11, 14, 0.96);
-  box-shadow: var(--shadow);
+@media (max-width: 940px) {
+  .app { grid-template-columns: var(--rail-w-collapsed) minmax(0, 1fr); }
+  .rail__brand-text,
+  .nav-item span:last-child,
+  .rail__foot { display: none; }
+  .nav-item { justify-content: center; padding: 10px; }
+  .topbar { padding: 0 var(--s-5); }
+  .viewport { padding: var(--s-5) var(--s-4) var(--s-8); }
+  .grid-2, .grid-3, .grid-2-1, .grid-1-2 { grid-template-columns: minmax(0, 1fr); }
+  .k-split { grid-template-columns: minmax(0, 1fr); gap: 14px 0; }
 }
 
-.command-copy {
-  display: grid;
-  align-content: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.command-copy h2 {
-  font-size: clamp(26px, 3vw, 42px);
-}
-
-.command-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.command-tile {
-  display: grid;
-  align-content: space-between;
-  min-height: 116px;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(16, 23, 29, 0.82);
-  min-width: 0;
-}
-
-.command-tile strong {
-  font-size: clamp(18px, 2vw, 26px);
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.command-tile small {
-  overflow-wrap: anywhere;
-}
-
-@media (hover: hover) {
-  .panel:hover,
-  .metric-card:hover,
-  .command-tile:hover {
-    border-color: rgba(56, 214, 255, 0.42);
-  }
-}
-
-@media (max-width: 900px) {
-  .topbar,
-  .panel-header,
-  .command-center {
-    display: grid;
-  }
-
-  .status-strip,
-  .command-grid,
-  .metrics-grid,
-    .dashboard-grid,
-    .split-list,
-    .model-grid,
-    .model-explain-grid,
-    .learning-grid,
-    .health-grid,
-    .control-grid,
-    .price-tape {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-grid > .panel,
-  .portfolio-panel,
-  .wide-panel {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 560px) {
-  .topbar {
-    padding-inline: 14px;
-  }
-
-  main {
-    padding-inline: 14px;
-  }
-
-  .status-pill,
-  .chip,
-  .control-button {
-    width: 100%;
-  }
-
-  .clean-list li,
-  .score-row,
-  .table-row,
-  .event-row,
-  .active-model-panel .clean-list li {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-
-  .clean-list strong,
-  .score-row b {
-    text-align: left;
-  }
+@media (max-width: 620px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+  .stat-row { grid-template-columns: minmax(0, 1fr); }
+  .hero__value { font-size: 44px; }
+  .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .row__value { justify-self: start; }
 }
 
   </style>
 </head>
 <body>
-  <header class="topbar">
+  <div class="app">
+    
+      <aside class="rail" aria-label="Primary navigation">
+        <div>
+          <div class="rail__brand">
+            <span class="rail__mark">TL</span>
+            <span class="rail__brand-text">
+              <strong>Trading Lab</strong>
+              <small>Paper Cockpit</small>
+            </span>
+          </div>
+          <nav class="rail__nav">
+            
+          <button class="nav-item" data-screen-link="home" type="button">
+            <span class="nav-item__icon">•</span>
+            <span>Home</span>
+          </button>
+          <button class="nav-item" data-screen-link="strategies" type="button">
+            <span class="nav-item__icon">M</span>
+            <span>Models</span>
+          </button>
+          <button class="nav-item" data-screen-link="paper" type="button">
+            <span class="nav-item__icon">P</span>
+            <span>Paper</span>
+          </button>
+          <button class="nav-item" data-screen-link="risk" type="button">
+            <span class="nav-item__icon">R</span>
+            <span>Risk</span>
+          </button>
+          <button class="nav-item" data-screen-link="research" type="button">
+            <span class="nav-item__icon">L</span>
+            <span>Research</span>
+          </button>
+          <button class="nav-item" data-screen-link="ai" type="button">
+            <span class="nav-item__icon">AI</span>
+            <span>AI Review</span>
+          </button>
+          </nav>
+        </div>
+        <div></div>
+        <div class="rail__foot">
+          <strong data-field="broker">memory-paper</strong>
+          <span data-field="kill-switch" class="pill pill--good pill--armed">Kill switch OFF</span>
+        </div>
+      </aside>
     <div>
-      <p class="eyebrow">Trading Lab</p>
-      <h1>Operator Dashboard</h1>
-    </div>
-    <div class="status-strip" aria-label="System status">
-      <span class="status-pill paper" data-field="mode">Paper Trading</span>
-      <span class="status-pill broker" data-field="broker">memory-paper</span>
-      <span class="status-pill calm" data-field="kill-switch">
-        Kill switch OFF
-      </span>
-    </div>
-  </header>
-
-  <main>
-
-    <section class="command-center" aria-label="Paper trading command center">
-      <div class="command-copy">
-        <p class="eyebrow">Paper Command Center</p>
-        <h2>Paper Trading</h2>
-        <p class="summary">Live-money actions are disabled. Strategy authority remains schedule-bound.</p>
-      </div>
-      <div class="command-grid">
-        <div class="command-tile warn">
-          <span class="label">Runtime</span>
-          <strong>standing by</strong>
-          <small>2026-05-29T16:00:00+00:00</small>
+      
+      <header class="topbar">
+        <div class="topbar__title">
+          <small>Operator Dashboard</small>
+          <span data-screen-title
+            data-title_home="Command Center"
+            data-title_strategies="Models"
+            data-title_paper="Paper Trading"
+            data-title_risk="Risk"
+            data-title_research="Research Lab"
+            data-title_ai="AI Review">Command Center</span>
         </div>
-        <div class="command-tile good">
-          <span class="label">Broker</span>
-          <strong>memory-paper</strong>
-          <small>connected</small>
+        <div class="topbar__strip">
+          <span class="mode mode--paper" data-field="mode">Paper Trading</span>
+          <span class="topbar__time"><span data-refresh-time> 2026-05-29T16:00:00+00:00</span></span>
         </div>
-        <div class="command-tile good">
-          <span class="label">Market data</span>
-          <strong>IEX</strong>
-          <small>fresh</small>
-        </div>
-        <div class="command-tile info">
-          <span class="label">Trading gate</span>
-          <strong>Daily close only</strong>
-          <small>0 order(s) this cycle</small>
+      </header>
+      <main class="viewport">
+        
+    <section class="screen" data-screen="home" hidden>
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Paper Command Center</span>
+          <h1>Live-money actions are disabled. Strategy authority remains schedule-bound.</h1>
         </div>
       </div>
+
+      
+      <section class="hero" aria-label="Paper Portfolio">
+        <div class="hero__lead">
+          <span class="hero__label">Paper Portfolio</span>
+          <div class="hero__value" data-field="estimated-equity">$10,000.00</div>
+          <div class="hero__delta">
+            <span class="delta-pos">+$2,500.00</span>
+            <span class="delta-divider">·</span>
+            <span>+33.33% today</span>
+            <span class="delta-divider">·</span>
+            <span>since open</span>
+          </div>
+        </div>
+        <div class="hero__chart" data-hero-chart>
+        <svg class="area-chart" viewBox="0 0 1200 300" preserveAspectRatio="none" role="img" aria-label="Paper equity curve">
+          <defs>
+            <linearGradient id="fill-pos" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2bd576" stop-opacity="0.28" />
+              <stop offset="100%" stop-color="#2bd576" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <line class="grid-line" x1="16" x2="1184" y1="78.5" y2="78.5" /><line class="grid-line" x1="16" x2="1184" y1="143.0" y2="143.0" /><line class="grid-line" x1="16" x2="1184" y1="207.5" y2="207.5" />
+          <path d="M 16.00 272.00 L 308.00 143.00 L 600.00 14.00 L 892.00 17.10 L 1184.00 14.00 L 1184.00 272.00 L 16.00 272.00 Z" class="fill-pos" />
+          <path d="M 16.00 272.00 L 308.00 143.00 L 600.00 14.00 L 892.00 17.10 L 1184.00 14.00" class="line-pos" />
+          <circle class="end-dot" cx="1184.00" cy="14.00" r="3.5" />
+        </svg></div>
+        <div class="hero__periods" role="tablist" aria-label="Time range">
+          <button class="period" data-period="1D" aria-pressed="true">1D</button>
+          <button class="period" data-period="1W" aria-pressed="false">1W</button>
+          <button class="period" data-period="1M" aria-pressed="false">1M</button>
+          <button class="period" data-period="3M" aria-pressed="false">3M</button>
+          <button class="period" data-period="YTD" aria-pressed="false">YTD</button>
+          <button class="period" data-period="ALL" aria-pressed="false">ALL</button>
+        </div>
+      </section>
+      <section class="stat-row" aria-label="Portfolio metrics">
+      <div class="stat">
+        <div class="stat__label">Cash</div>
+        <div class="stat__value" ><span data-field="cash">$7,500.00</span></div>
+        <div class="stat__detail">Available in ledger</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Day P&amp;L</div>
+        <div class="stat__value" ><span data-field="realized-pnl">$0.00</span></div>
+        <div class="stat__detail">Open orders: <span data-field="open-orders">0</span></div>
+      </div>
+      <div class="stat stat--warn">
+        <div class="stat__label">Risk State</div>
+        <div class="stat__value" ><span data-field="risk-severity">ATTENTION</span></div>
+        <div class="stat__detail">1 rejection</div>
+      </div>
+      <div class="stat stat--ai">
+        <div class="stat__label">Active models</div>
+        <div class="stat__value" >1</div>
+        <div class="stat__detail">paper authority only</div>
+      </div></section>
+
+      <div class="grid-2-1">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Daily Report</span>
+            <h2>Latest decisions</h2>
+          </div>
+          <span class="pill pill--ghost" >2 reviewed</span>
+        </div>
+        <div class="surface__body">
+          <div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><strong>SPY BUY</strong><small>daily-order-1</small></div>
+        <div class="row__meta">FILLED</div>
+        <div class="row__value pos">POS</div>
+      </div>
+      <div class="row row--danger">
+        <div class="row__primary"><strong>SPY BUY</strong><small>daily-order-2</small></div>
+        <div class="row__meta">REJECTED</div>
+        <div class="row__value neg">NEG</div>
+      </div></div>
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">AI Daily Memo</span>
+            <h2>AI is a copilot, not an oracle</h2>
+          </div>
+          <span class="pill pill--ai" >REVIEWED</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="memo">
+        2 paper order(s) were reviewed: 1 accepted and 1 rejected. Ending cash is 7500, estimated equity is 10000, and there are 1 open position(s). Risk requires attention; 1 risk rejection(s) and 0 reconciliation issue(s) were recorded. Realized paper tax lots total 0. 1 broker fill(s) were traced to the ledger. Data quality status is warning with 0 failure(s) and 1 warning(s). Active model is monthly_sector_momentum:1.0.0 with paper authority and daily_close cadence.
+        <small>AI copilot · explainable · paper authority only</small>
+      </div>
+      <div class="k-list">
+        <div class="k-row">
+          <span>Confidence</span>
+          <strong data-numeric="1"><span class="conf-dots" aria-label="confidence"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span> <span class="ai-c">0.73</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Authority</span>
+          <strong>paper · manual approval</strong>
+        </div>
+      </div>
+        </div>
+        
+      </article>
+      </div>
+
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Runtime Proof</span>
+            <h2>System status</h2>
+          </div>
+          <span class="pill pill--ai" >Daily close only</span>
+        </div>
+        <div class="surface__body">
+          <div class="k-list">
+        <div class="k-row">
+          <span>Runtime</span>
+          <strong><span data-field="runtime-status">awaiting</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Trading authority</span>
+          <strong><span data-field="trading-authority">Daily close only</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Prices refreshed</span>
+          <strong><span data-field="prices-refreshed">no</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Broker synced</span>
+          <strong><span data-field="broker-synced">no</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Broker connection</span>
+          <strong><span data-field="broker-connection">connected</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Active model</span>
+          <strong><span data-field="active-model-key">monthly_sector_momentum:1.0.0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Orders submitted</span>
+          <strong><span data-field="orders-submitted">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Fills applied</span>
+          <strong><span data-field="fills-applied">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Reconciliation</span>
+          <strong><span data-field="reconciliation" class="pos">Reconciled</span></strong>
+        </div></div>
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Paper Boundary</span>
+            <h2>Live disabled</h2>
+          </div>
+          <span class="pill pill--good" >Paper only</span>
+        </div>
+        <div class="surface__body">
+          <div class="k-list">
+        <div class="k-row">
+          <span>Runtime mode</span>
+          <strong><span data-field="paper-boundary-mode">Paper Trading</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Money at risk</span>
+          <strong><span class="pos">$0 real capital</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Blocked products</span>
+          <strong>No margin, shorts, options</strong>
+        </div>
+        <div class="k-row">
+          <span>Live readiness</span>
+          <strong><span data-field="live-readiness-status">ready_for_review</span></strong>
+        </div></div>
+        </div>
+        
+      </article>
+      </div>
+
+      <div class="grid-2">
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Latest Prices</span>
+            <h2>Market data · <span data-field="price-feed">IEX</span></h2>
+          </div>
+          <span class="pill pill--good" >FRESH</span>
+        </div>
+        <div class="surface__body">
+          
+          <div class="k-row">
+            <span>Freshness</span><strong><span data-field="price-freshness" class="mono">fresh</span></strong>
+          </div>
+          <div class="row-list" data-latest-price-list>
+      <div class="row">
+        <div class="row__primary"><strong>SPY</strong><small>fresh</small></div>
+        
+        <div class="row__value pos">$500.00</div>
+      </div></div>
+          <p class="microcopy" data-field="price-warning">IEX/free data is development-grade and should not drive final funding decisions.</p>
+          <p class="microcopy">IEX development-grade demo feed</p>
+        
+        </div>
+        
+      </article>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Data Quality Evidence</span>
+            <h2><span data-field="data-quality-status">warning</span></h2>
+          </div>
+          <span class="pill pill--warn" data-field="data-quality-chip">warning</span>
+        </div>
+        <div class="surface__body">
+          
+      <p class="surface__summary" data-field="data-quality-summary">Market data quality checks passed with 1 warning(s).</p>
+      
+      <div class="k-split">
+        <div class="k-list">
+        <div class="k-row">
+          <span>Research usable</span>
+          <strong><span data-field="data-quality-research-usable">yes</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Trading usable</span>
+          <strong><span data-field="data-quality-trading-usable">no</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Warnings</span>
+          <strong><span data-field="data-quality-warnings" class="mono">1</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Failures</span>
+          <strong><span data-field="data-quality-failures" class="mono">0</span></strong>
+        </div></div>
+        <div class="k-list">
+        <div class="k-row">
+          <span>Dataset</span>
+          <strong><span data-field="data-quality-dataset">latest_prices</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Symbols</span>
+          <strong><span data-field="data-quality-symbols">1 tracked</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Sources</span>
+          <strong><span data-field="data-quality-sources">dashboard-demo</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Feeds</span>
+          <strong><span data-field="data-quality-feeds">IEX</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Window</span>
+          <strong><span data-field="data-quality-window">2026-05-29T16:00:00+00:00</span></strong>
+        </div></div>
+      </div>
+      <div class="k-row"><span>Quality Issues</span><strong>1 warning · 0 failure</strong></div>
+      <div class="row-list" data-data-quality-issue-list>
+        
+      <div class="row row--warn">
+        <div class="row__primary"><strong>IEX Development Grade</strong><small>IEX/free data is development-grade and should not drive final funding decisions.</small></div>
+        <div class="row__meta">dataset</div>
+        
+      </div>
+      </div>
+        </div>
+        
+      </article></div>
     </section>
+    <section class="screen" data-screen="strategies" hidden>
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Models</span>
+          <h1>Inspect and compare trading models.</h1>
+          <p>Every signal answers which model fired, what evidence it used, and how the risk engine reacted.</p>
+        </div>
+      </div>
 
-    <section class="metrics-grid" aria-label="Portfolio metrics">
-
-      <article class="metric-card good">
-        <span>Paper cash</span>
-        <strong>$7,500.00</strong>
-        <small>Internal ledger balance</small>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Active Model</span>
+            <h2><span data-field="active-strategy-name">Monthly Sector ETF Momentum</span></h2>
+          </div>
+          <span class="pill pill--ai" data-field="active-strategy-authority">paper</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="hero__lead">
+        <span class="hero__label">Hypothesis</span>
+        <p class="surface__summary" data-field="active-strategy-hypothesis">U.S. sector ETFs with stronger trailing momentum may continue outperforming over the next monthly holding window.</p>
+      </div>
+      <div class="k-list">
+        <div class="k-row">
+          <span>Model key</span>
+          <strong data-numeric="1"><span data-field="active-strategy-id" class="mono">monthly_sector_momentum:1.0.0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Cadence</span>
+          <strong><span data-field="active-strategy-cadence">daily_close</span></strong>
+        </div>
+      </div>
+        </div>
+        
       </article>
-
-      <article class="metric-card good">
-        <span>Estimated equity</span>
-        <strong>$10,000.00</strong>
-        <small>Cash plus paper positions</small>
-      </article>
-
-      <article class="metric-card warn">
-        <span>Risk decisions</span>
-        <strong>2</strong>
-        <small>1 rejection</small>
-      </article>
-
-      <article class="metric-card info">
-        <span>Learning safety</span>
-        <strong>Locked</strong>
-        <small>Active model unchanged</small>
-      </article>
-    </section>
-
-    <section class="dashboard-grid">
-      <article class="panel portfolio-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Paper Portfolio</p>
-            <h2 data-field="estimated-equity">$10,000.00</h2>
-          </div>
-          <span class="chip good" data-field="reconciliation">Reconciled</span>
-        </div>
-        <div class="equity-visual">
-
-        <svg viewBox="0 0 420 130" role="img" aria-label="Paper equity curve">
-          <rect class="chart-bg" x="0" y="0" width="420" height="130" rx="8"></rect>
-          <polyline points="0.00,119.00 105.00,65.00 210.00,11.00 315.00,11.86 420.00,11.00" fill="none" stroke="#00e676" stroke-width="4"></polyline>
-          <circle cx="420.00" cy="11.00" r="5"></circle>
-        </svg>
-        </div>
-        <div class="split-list">
-          <div>
-            <span class="label">Cash</span>
-            <strong data-field="cash">$7,500.00</strong>
-          </div>
-          <div>
-            <span class="label">Open orders</span>
-            <strong data-field="open-orders">0</strong>
-          </div>
-          <div>
-            <span class="label">Realized P&L</span>
-            <strong data-field="realized-pnl">$0.00</strong>
-          </div>
-        </div>
-      </article>
-
-
-      <article class="panel boundary-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Paper Boundary</p>
-            <h2>Live Disabled</h2>
-          </div>
-          <span class="chip good">Paper only</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Runtime mode</span><strong data-field="paper-boundary-mode">Paper Trading</strong></li>
-          <li><span>Money at risk</span><strong>$0 real capital</strong></li>
-          <li><span>Blocked products</span><strong>No margin, shorts, options</strong></li>
-          <li><span>Live readiness</span><strong data-field="live-readiness-status">ready_for_review</strong></li>
-        </ul>
-      </article>
-
-      <article class="panel risk-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Risk State</p>
-            <h2 data-field="risk-severity">ATTENTION</h2>
-          </div>
-          <span class="chip warn">1 rejection</span>
-        </div>
-        <div class="risk-meter" aria-label="Risk meter">
-          <span style="height: 18%"></span>
-          <span style="height: 28%"></span>
-          <span class="active" style="height: 62%"></span>
-          <span style="height: 38%"></span>
-          <span style="height: 22%"></span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Rules triggered</span><strong>MAX_ORDERS_PER_DAY</strong></li>
-          <li><span>Broker reconciliation</span><strong>Clean</strong></li>
-          <li><span>Data feed</span><strong>IEX development-grade demo feed</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel wide-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Latest Prices</p>
-            <h2 data-field="price-freshness">fresh</h2>
-          </div>
-          <span class="chip good" data-field="price-feed">IEX</span>
-        </div>
-        <div class="price-tape" data-latest-price-list>
-
-          <div class="price-pill good">
-            <span>SPY</span>
-            <strong>$500.00</strong>
-            <small>fresh</small>
-          </div>
-        </div>
-        <p class="microcopy" data-field="price-warning">IEX/free data is development-grade and should not drive final funding decisions.</p>
-      </article>
-
-
-      <article class="panel wide-panel data-quality-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Data Quality Evidence</p>
-            <h2 data-field="data-quality-status">warning</h2>
-          </div>
-          <span class="chip warn" data-field="data-quality-chip">warning</span>
-        </div>
-        <p class="summary" data-field="data-quality-summary">Market data quality checks passed with 1 warning(s).</p>
-        <div class="model-explain-grid">
-          <ul class="clean-list">
-            <li><span>Research usable</span><strong data-field="data-quality-research-usable">yes</strong></li>
-            <li><span>Trading usable</span><strong data-field="data-quality-trading-usable">no</strong></li>
-            <li><span>Warnings</span><strong data-field="data-quality-warnings">1</strong></li>
-            <li><span>Failures</span><strong data-field="data-quality-failures">0</strong></li>
-          </ul>
-          <ul class="clean-list">
-            <li><span>Dataset</span><strong data-field="data-quality-dataset">latest_prices</strong></li>
-            <li><span>Symbols</span><strong data-field="data-quality-symbols">1 tracked</strong></li>
-            <li><span>Sources</span><strong data-field="data-quality-sources">dashboard-demo</strong></li>
-            <li><span>Feeds</span><strong data-field="data-quality-feeds">IEX</strong></li>
-            <li><span>Window</span><strong data-field="data-quality-window">2026-05-29T16:00:00+00:00</strong></li>
-          </ul>
-        </div>
-        <div class="event-list" data-data-quality-issue-list>
-          <span class="label">Quality Issues</span>
-
-          <div class="event-row warn-border">
-            <strong>IEX Development Grade</strong>
-            <span>dataset</span>
-            <small>IEX/free data is development-grade and should not drive final funding decisions.</small>
-          </div>
-        </div>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Runtime Proof</p>
-            <h2 data-field="runtime-status">awaiting</h2>
-          </div>
-          <span class="chip info">Daily close only</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Prices refreshed</span><strong data-field="prices-refreshed">no</strong></li>
-          <li><span>Broker synced</span><strong data-field="broker-synced">no</strong></li>
-          <li><span>Broker connection</span><strong data-field="broker-connection">connected</strong></li>
-          <li><span>Active model</span><strong data-field="active-model-key">monthly_sector_momentum:1.0.0</strong></li>
-          <li><span>Trading authority</span><strong data-field="trading-authority">Daily close only</strong></li>
-          <li><span>Orders submitted</span><strong data-field="orders-submitted">0</strong></li>
-          <li><span>Fills applied</span><strong data-field="fills-applied">0</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel wide-panel active-model-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Active Model</p>
-            <h2 data-field="active-strategy-name">Monthly Sector ETF Momentum</h2>
-          </div>
-          <span class="chip info" data-field="active-strategy-authority">paper</span>
-        </div>
-        <p class="summary" data-field="active-strategy-hypothesis">U.S. sector ETFs with stronger trailing momentum may continue outperforming over the next monthly holding window.</p>
-        <div class="model-explain-grid">
-          <ul class="clean-list">
-            <li><span>Model key</span><strong data-field="active-strategy-id">monthly_sector_momentum:1.0.0</strong></li>
-            <li><span>Cadence</span><strong data-field="active-strategy-cadence">daily_close</strong></li>
-            <li><span>Benchmark</span><strong data-field="active-strategy-benchmark">SPY</strong></li>
-            <li><span>Universe</span><strong data-field="active-strategy-universe">11 U.S. ETF(s)</strong></li>
-          </ul>
-          <ul class="clean-list">
-            <li><span>Signal</span><strong data-field="active-strategy-signal">Rank symbols by trailing adjusted close-to-close return using only bars before the execution date.</strong></li>
-            <li><span>Sizing</span><strong data-field="active-strategy-sizing">Equal weight the top 3 selected ETF(s).</strong></li>
-            <li><span>Exit</span><strong data-field="active-strategy-exit">Sell removed or overweight holdings first, then buy underweight target holdings.</strong></li>
-          </ul>
-        </div>
-        <div class="model-explain-grid">
-          <div class="event-list" data-active-strategy-failure-list>
-            <span class="label">Known Failure Modes</span>
-
-          <div class="event-row">
-            <small>Momentum reversals after sector leadership changes.</small>
-          </div>
-
-          <div class="event-row">
-            <small>High correlation across sectors during broad market stress.</small>
-          </div>
-
-          <div class="event-row">
-            <small>Overfitting lookback/top-N parameters to recent history.</small>
-          </div>
-          </div>
-          <div class="event-list" data-active-strategy-ai-role-list>
-            <span class="label">AI Role</span>
-
-          <div class="event-row">
-            <small>Explain rank changes and trade rationale.</small>
-          </div>
-
-          <div class="event-row">
-            <small>Compare candidate parameters overnight.</small>
-          </div>
-
-          <div class="event-row">
-            <small>Recommend shadow candidates without changing the active model.</small>
-          </div>
-          </div>
-        </div>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Functional Readiness</p>
-            <h2 data-field="completion-status">Awaiting Audit</h2>
-          </div>
-          <span class="chip warn" data-field="completion-chip">Review</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Proven</span><strong data-field="completion-proven">0</strong></li>
-          <li><span>Missing</span><strong data-field="completion-missing">unknown</strong></li>
-          <li><span>Failed</span><strong data-field="completion-failed">unknown</strong></li>
-          <li><span>External proof</span><strong data-field="completion-external">required</strong></li>
-          <li><span>Audit report</span><strong data-field="completion-path">not written</strong></li>
-        </ul>
-        <p class="microcopy" data-field="completion-summary">Run the functional completion audit after validation and soak evidence exists.</p>
-      </article>
-
-
-      <article class="panel final-acceptance-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Final Acceptance</p>
-            <h2 data-field="final-acceptance-status">Awaiting Signoff</h2>
-          </div>
-          <span class="chip warn" data-field="final-acceptance-chip">Not final</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Accepted</span><strong data-field="final-acceptance-accepted">no</strong></li>
-          <li><span>Checks</span><strong data-field="final-acceptance-checks">0/0</strong></li>
-          <li><span>Signoff</span><strong data-field="final-acceptance-signoff">missing</strong></li>
-          <li><span>Report</span><strong data-field="final-acceptance-path">not written</strong></li>
-        </ul>
-        <p class="microcopy" data-field="final-acceptance-summary">Run final acceptance after operator signoff and reviewed Alpaca Paper evidence.</p>
-      </article>
-
-
-      <article class="panel statement-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Statement Review</p>
-            <h2 data-field="statement-status">Reconciled</h2>
-          </div>
-          <span class="chip good" data-field="statement-chip">Clean</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Statement</span><strong data-field="statement-id">statement-2026-05-29</strong></li>
-          <li><span>Provider</span><strong data-field="statement-provider">memory-paper</strong></li>
-          <li><span>Issues</span><strong data-field="statement-issues">0</strong></li>
-          <li><span>Report</span><strong data-field="statement-path">data/runtime/reports/statement-reconciliation-statement-2026-05-29.md</strong></li>
-        </ul>
-        <div class="event-list" data-statement-issue-list>
-          <span class="label">Statement Issues</span>
-          <p class="empty">No statement differences above tolerance.</p>
-        </div>
-        <p class="microcopy" data-field="statement-caveat">Paper/research-only review. Not filing-grade tax accounting.</p>
-      </article>
-
-
-      <article class="panel wide-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Runtime Health</p>
-            <h2 data-field="health-status">degraded</h2>
-          </div>
-          <span class="chip warn" data-field="health-incident-count">1 incident</span>
-        </div>
-        <p class="summary" data-field="health-summary">Demo paper runtime is healthy except for one risk rejection.</p>
-        <p class="microcopy" data-field="health-report-path">Incident review: not written</p>
-        <div class="health-grid">
-          <div class="mini-table" data-health-check-list>
-            <span class="label">Health Checks</span>
-
-          <div class="table-row">
-            <span>runtime_loop</span>
-            <strong>healthy</strong>
-            <em>Demo runtime heartbeat is fresh.</em>
-          </div>
-
-          <div class="table-row">
-            <span>reconciliation</span>
-            <strong>healthy</strong>
-            <em>Broker and internal ledger reconciliation is clean.</em>
-          </div>
-
-          <div class="table-row">
-            <span>alerts</span>
-            <strong>degraded</strong>
-            <em>One demo warning alert is active.</em>
-          </div>
-          </div>
-          <div class="event-list" data-incident-list>
-            <span class="label">Incident Command</span>
-
-          <div class="event-row warn-border">
-            <strong>Risk rejected an order</strong>
-            <span>degraded</span>
-            <small>Demo max-orders rule rejected the second paper order.</small>
-            <small>Review the rejected order before changing strategy.</small>
-          </div>
-          </div>
-        </div>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Operator Controls</p>
-            <h2 data-field="control-state-heading">Armed</h2>
-          </div>
-          <span class="chip good" data-field="paper-kill-switch-state">Kill OFF</span>
-        </div>
-        <div class="control-grid" data-control-grid>
-          <button class="control-button" data-control-action="resume_runtime" disabled>Resume</button>
-          <button class="control-button" data-control-action="pause_runtime">Pause</button>
-          <button class="control-button" data-control-action="disable_paper_kill_switch" disabled>Kill Off</button>
-          <button class="control-button" data-control-action="enable_paper_kill_switch">Kill On</button>
-          <button class="control-button" data-control-action="force_reconciliation">Reconcile</button>
-          <button class="control-button" data-control-action="generate_report">Report</button>
-        </div>
-        <ul class="clean-list">
-          <li><span>Last action</span><strong data-field="last-control-action">none</strong></li>
-          <li><span>Updated by</span><strong data-field="control-updated-by">system</strong></li>
-          <li><span>Updated at</span><strong data-field="control-updated-at">2026-05-29T16:00:00+00:00</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Runtime Alerts</p>
-            <h2 data-field="alert-count">1 active</h2>
-          </div>
-          <span class="chip warn" data-field="alert-tone">WARN</span>
-        </div>
-        <div class="event-list" data-alert-list>
-
-          <div class="event-row warn-border">
-            <strong>Risk rejected an order</strong>
-            <span>risk_rejection</span>
-            <small>Demo max-orders rule rejected the second paper order.</small>
-            <small>daily-order-2 / SPY / MAX_ORDERS_PER_DAY</small>
-          </div>
-        </div>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Live Readiness</p>
-            <h2 data-field="live-readiness-panel-status">ready_for_review</h2>
-          </div>
-          <span class="chip warn">Live disabled</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Checks passed</span><strong data-field="live-readiness-checks">9/9</strong></li>
-          <li><span>Max order</span><strong data-field="live-max-order">$250.00</strong></li>
-          <li><span>Approved models</span><strong data-field="live-approved-models">1</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Reports And Learning</p>
-            <h2 data-field="report-status">Snapshot</h2>
-          </div>
-          <span class="chip good">Model locked</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Daily report</span><strong data-field="daily-report-state">snapshot</strong></li>
-          <li><span>Report path</span><strong data-field="daily-report-path">not written</strong></li>
-          <li><span>Trading day</span><strong data-field="trading-day">2026-05-29</strong></li>
-          <li><span>Nightly learning</span><strong data-field="learning-state">complete</strong></li>
-          <li><span>Learning memo</span><strong data-field="learning-memo-path">not written</strong></li>
-          <li><span>Active mutation</span><strong data-field="active-mutation-state">blocked</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Audit Trail</p>
-            <h2>2 trace</h2>
-          </div>
-          <span class="chip info">7 sources</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Fills traced</span><strong>1</strong></li>
-          <li><span>Operator actions</span><strong>0</strong></li>
-          <li><span>Runtime events</span><strong>0</strong></li>
-          <li><span>Benchmark</span><strong>unavailable</strong></li>
-        </ul>
-      </article>
-
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Accounting</p>
-            <h2>Tax Estimate</h2>
-          </div>
-          <span class="chip warn" data-field="tax-estimate-state">estimate only</span>
-        </div>
-        <ul class="clean-list">
-          <li><span>Active lots</span><strong data-field="tax-active-lots">1</strong></li>
-          <li><span>Realized lots</span><strong data-field="tax-realized-lots">0</strong></li>
-          <li><span>Lot method</span><strong data-field="tax-lot-method">FIFO</strong></li>
-          <li><span>Short-term gains</span><strong data-field="tax-short-term-gains">$0.00</strong></li>
-          <li><span>Long-term gains</span><strong data-field="tax-long-term-gains">$0.00</strong></li>
-          <li><span>Total gains</span><strong data-field="tax-total-gains">$0.00</strong></li>
-          <li><span>Estimated tax</span><strong data-field="tax-estimated-tax">unavailable</strong></li>
-        </ul>
-        <p class="microcopy">Research estimate only. Not filing-grade tax accounting.</p>
-      </article>
-
-      <article class="panel wide-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Model Arena</p>
+      <section class="stat-row" aria-label="Active model metrics">
+      <div class="stat stat--neg">
+        <div class="stat__label">Score</div>
+        <div class="stat__value" ><span class="mono">-0.0240</span></div>
+        <div class="stat__detail">Champion · arena scoring</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Cadence</div>
+        <div class="stat__value" ><span class="mono">daily_close</span></div>
+        <div class="stat__detail">Holding period · Approximately one month between rebalance checks.</div>
+      </div>
+      <div class="stat stat--ai">
+        <div class="stat__label">Universe</div>
+        <div class="stat__value" ><span data-field="active-strategy-universe" class="mono">11 U.S. ETF(s)</span></div>
+        <div class="stat__detail">Paper authority only</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Benchmark</div>
+        <div class="stat__value" ><span data-field="active-strategy-benchmark" class="mono">SPY</span></div>
+        <div class="stat__detail">Excess return measured vs. this index</div>
+      </div></section>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Model Arena</span>
             <h2>Champion / Challenger</h2>
           </div>
-          <span class="chip info">Active model locked</span>
+          <span class="pill pill--ai" >recommend · promote_to_shadow</span>
         </div>
-        <div class="model-grid">
-
-          <div class="model-card">
-            <div>
-              <span class="label">Champion</span>
-              <strong>1.0.0</strong>
-            </div>
-            <p>monthly_sector_momentum</p>
-            <div class="score-row"><span>Score</span><b>0.0505</b></div>
-            <div class="score-row"><span>State</span><b>paper</b></div>
-            <small>Active: monthly_sector_momentum:1.0.0</small>
-          </div>
-
-          <div class="model-card">
-            <div>
-              <span class="label">Challenger</span>
-              <strong>1.1.0-shadow-candidate</strong>
-            </div>
-            <p>monthly_sector_momentum</p>
-            <div class="score-row"><span>Score</span><b>0.0505</b></div>
-            <div class="score-row"><span>State</span><b>backtest</b></div>
-            <small>Challenger passed walk-forward thresholds and can enter shadow mode for live observation without changing the active champion.</small>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Daily Report</p>
-            <h2>AI Governance Summary</h2>
-          </div>
-        </div>
-        <p class="summary">2 paper order(s) were reviewed: 1 accepted and 1 rejected. Ending cash is 7500, estimated equity is 10000, and there are 1 open position(s). Risk requires attention; 1 risk rejection(s) and 0 reconciliation issue(s) were recorded. Realized paper tax lots total 0. 1 broker fill(s) were traced to the ledger. Data quality status is warning with 0 failure(s) and 1 warning(s). Active model is monthly_sector_momentum:1.0.0 with paper authority and daily_close cadence.</p>
-        <div class="mini-table">
-
-          <div class="table-row">
-            <span>daily-order-1</span>
-            <strong>SPY BUY</strong>
-            <em>FILLED</em>
-          </div>
-
-          <div class="table-row">
-            <span>daily-order-2</span>
-            <strong>SPY BUY</strong>
-            <em>REJECTED</em>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Rejected Signals</p>
-            <h2>1</h2>
-          </div>
-          <span class="chip warn">Review</span>
-        </div>
-        <div class="event-list">
-
-          <div class="event-row warn-border">
-            <strong>MAX_ORDERS_PER_DAY</strong>
-            <span>daily-order-2 SPY</span>
-            <small>max orders per day would be exceeded</small>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel wide-panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Nightly Learning</p>
-            <h2>Shadow Candidate Recommended</h2>
-          </div>
-          <span class="chip good">No active mutation</span>
-        </div>
-        <p class="microcopy">AI copilot confidence 0.73; manual review is required before any model authority changes.</p>
-        <div class="learning-grid">
-          <div class="memo">Nightly learning compared 1 challenger model(s). 1 candidate(s) were recommended for shadow mode. Active model unchanged: True.</div>
-          <div class="comparison-bars">
-
-        <svg viewBox="0 0 260 150" role="img" aria-label="Champion challenger score comparison">
-          <rect class="chart-bg" x="0" y="0" width="260" height="150" rx="8"></rect>
-          <g class="bar-chart">
-          <rect x="30" y="94.00" width="54" height="24.00" rx="4"></rect>
-          <text x="57" y="138" text-anchor="middle">Champion</text>
-          <rect x="150" y="94.00" width="54" height="24.00" rx="4"></rect>
-          <text x="177" y="138" text-anchor="middle">Challenger</text></g>
+        <div class="surface__body">
+          
+          
+        <svg class="bar-compare" viewBox="0 0 290 160" role="img" aria-label="Champion versus challenger score comparison">
+          <rect class="bg" x="0.5" y="0.5" width="289" height="159" rx="10" />
+          
+          <rect class="bar bar-champ" x="40" y="100.0" width="60" height="30.0" rx="3" />
+          <text x="70" y="148" text-anchor="middle">Champion</text>
+          <text x="70" y="94.0" text-anchor="middle" fill="#f4f6f8">-0.0240</text>
+          <rect class="bar bar-chal" x="170" y="10.0" width="60" height="120.0" rx="3" />
+          <text x="200" y="148" text-anchor="middle">Challenger</text>
+          <text x="200" y="4.0" text-anchor="middle" fill="#f4f6f8">-0.0131</text>
         </svg>
+          
+      <div class="k-split">
+        <div class="k-list">
+        <div class="k-row">
+          <span>Champion</span>
+          <strong><span class="mono">monthly_sector_momentum:1.0.0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Champion score</span>
+          <strong><span class="mono ai-c">-0.0240</span></strong>
+        </div>
+        <div class="k-row">
+          <span>State</span>
+          <strong><span>paper</span></strong>
+        </div></div>
+        <div class="k-list">
+        <div class="k-row">
+          <span>Challenger</span>
+          <strong><span class="mono">monthly_sector_momentum:1.1.0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Challenger score</span>
+          <strong><span class="mono pos">-0.0131</span></strong>
+        </div>
+        <div class="k-row">
+          <span>State</span>
+          <strong><span>validated</span></strong>
+        </div></div>
+      </div>
+          <div class="k-row">
+            <span>Score delta</span>
+            <strong data-numeric="1"><span class="mono pos">+0.0108</span></strong>
+          </div>
+          <p class="surface__summary">Challenger has stronger after-cost evidence and can be reviewed for shadow mode.</p>
+          <p class="microcopy" >Promotion requires manual approval. Challenger remains in research authority until reviewed.</p>
+        </div>
+        
+      </article>
+      <div class="grid-3" aria-label="Trade lifecycle logic">
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Signal</span>
+            <h2>How the model enters</h2>
+          </div>
+          
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary" data-field="active-strategy-signal">Rank symbols by trailing adjusted close-to-close return using only bars before the execution date.</p>
+        </div>
+        
+      </article>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Sizing</span>
+            <h2>How the model allocates</h2>
+          </div>
+          
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary" data-field="active-strategy-sizing">Equal weight the top 3 selected ETF(s).</p>
+        </div>
+        
+      </article>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Exit</span>
+            <h2>How the model leaves</h2>
+          </div>
+          
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary" data-field="active-strategy-exit">Sell removed or overweight holdings first, then buy underweight target holdings.</p>
+        </div>
+        
+      </article></div>
+      <div class="grid-2">
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Known Failure Modes</span>
+            <h2>Where this model breaks</h2>
+          </div>
+          <span class="pill pill--warn" >3 documented</span>
+        </div>
+        <div class="surface__body">
+          <div class="row-list" data-active-strategy-failure-list>
+      <div class="row row--warn">
+        <div class="row__primary"><small>Momentum reversals after sector leadership changes.</small></div>
+        
+        
+      </div>
+      <div class="row row--warn">
+        <div class="row__primary"><small>High correlation across sectors during broad market stress.</small></div>
+        
+        
+      </div>
+      <div class="row row--warn">
+        <div class="row__primary"><small>Overfitting lookback/top-N parameters to recent history.</small></div>
+        
+        
+      </div></div>
+        </div>
+        
+      </article>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">AI Role</span>
+            <h2>What the copilot does</h2>
+          </div>
+          <span class="pill pill--ai" >copilot · not oracle</span>
+        </div>
+        <div class="surface__body">
+          <div class="row-list" data-active-strategy-ai-role-list>
+      <div class="row row--ai">
+        <div class="row__primary"><small>Explain rank changes and trade rationale.</small></div>
+        
+        
+      </div>
+      <div class="row row--ai">
+        <div class="row__primary"><small>Compare candidate parameters overnight.</small></div>
+        
+        
+      </div>
+      <div class="row row--ai">
+        <div class="row__primary"><small>Recommend shadow candidates without changing the active model.</small></div>
+        
+        
+      </div></div>
+        </div>
+        
+      </article></div>
+    </section>
+    <section class="screen" data-screen="paper" hidden>
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Paper Trading</span>
+          <h1>Holdings, fills, and the reconciliation evidence behind them.</h1>
+          <p>Paper mode only. Every order, fill, and lot is traceable.</p>
+        </div>
+      </div>
+
+      
+      <section class="hero" aria-label="Paper holdings">
+        <div class="hero__lead">
+          <span class="hero__label">Holdings</span>
+          <div class="hero__value"><span data-field="position-count">1</span></div>
+          <div class="hero__delta">
+            <span>open position held</span>
+            <span class="delta-divider">·</span>
+            <span>fake-money ledger</span>
           </div>
         </div>
+        <p class="microcopy">Paper mode only. No live-money actions.</p>
+      </section>
+      <section class="stat-row" aria-label="Paper portfolio metrics">
+      <div class="stat">
+        <div class="stat__label">Cash</div>
+        <div class="stat__value" >$7,500.00</div>
+        <div class="stat__detail">Available in paper ledger</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Open orders</div>
+        <div class="stat__value" >0</div>
+        <div class="stat__detail">Awaiting broker fill</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Realized P&amp;L</div>
+        <div class="stat__value" >$0.00</div>
+        <div class="stat__detail">Closed lots, paper currency</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Positions</div>
+        <div class="stat__value" >1</div>
+        <div class="stat__detail">Symbols currently held</div>
+      </div></section>
+
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Holdings ledger</span>
+            <h2>Positions</h2>
+          </div>
+          <span class="pill pill--ai" >1 held</span>
+        </div>
+        <div class="surface__body">
+          <div class="row-list" data-position-list>
+      <div class="row">
+        <div class="row__primary"><strong>SPY</strong><small>avg <span class="mono">$500.00</span></small></div>
+        <div class="row__meta"><span class="mono">5 sh</span> <span class="mono"><svg class="spark" viewBox="0 0 80 28" role="img" aria-label="SPY trend"><path d="M 1.0,25.0 L 20.5,25.0 L 40.0,25.0 L 59.5,25.0 L 79.0,25.0" class="pos" /></svg></span></div>
+        <div class="row__value ">$2,500.00</div>
+      </div></div>
+        </div>
+        
       </article>
 
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Positions</p>
-            <h2 data-field="position-count">1 open</h2>
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Activity</span>
+            <h2>Recent Fills · <span data-field="fill-count" class="mono">1</span></h2>
           </div>
+          <span class="pill pill--ai" >1 today</span>
         </div>
-        <div class="mini-table" data-position-list>
-
-          <div class="table-row">
-            <span>SPY</span>
-            <strong>5</strong>
-            <em>$500.00</em>
-          </div>
+        <div class="surface__body">
+          <div class="row-list" data-fill-list>
+      <div class="row">
+        <div class="row__primary"><strong>SPY</strong><small>2026-05-29T16:00:00+00:00</small></div>
+        <div class="row__meta"><span class="pill pill--good" >BUY</span></div>
+        <div class="row__value pos"><span class="mono">5 @ $500.00</span></div>
+      </div></div>
         </div>
+        
       </article>
-
-      <article class="panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Recent Fills</p>
-            <h2 data-field="fill-count">1</h2>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Activity</span>
+            <h2>Open Orders</h2>
           </div>
+          <span class="pill pill--ghost" >Idle</span>
         </div>
-        <div class="event-list" data-fill-list>
+        <div class="surface__body">
+          <p class="empty">No working orders. Authority is schedule-bound.</p><p class="microcopy" >Strategies place orders at the daily close window only.</p>
+        </div>
+        
+      </article>
+      </div>
 
-          <div class="event-row">
-            <strong>SPY BUY</strong>
-            <span>5 @ $500.00</span>
-            <small>2026-05-29T16:00:00+00:00</small>
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Statement Review</span>
+            <h2><span data-field="statement-status">Reconciled</span></h2>
           </div>
+          <span class="pill pill--good" data-field="statement-chip">Clean</span>
         </div>
+        <div class="surface__body">
+          
+      <div class="k-list">
+        <div class="k-row">
+          <span>Statement</span>
+          <strong><span data-field="statement-id" class="mono">statement-2026-05-29</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Provider</span>
+          <strong><span data-field="statement-provider">memory-paper</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Issues</span>
+          <strong><span data-field="statement-issues" class="mono">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Report</span>
+          <strong><span data-field="statement-path">data/runtime/reports/statement-reconciliation-statement-2026-05-29.md</span></strong>
+        </div></div>
+      <div class="row-list" data-statement-issue-list>
+        <p class="empty">No statement differences above tolerance.</p>
+      </div>
+      <p class="microcopy" data-field="statement-caveat">Paper/research-only review. Not filing-grade tax accounting.</p>
+    
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Audit Trail</span>
+            <h2>Provenance</h2>
+          </div>
+          <span class="pill pill--ai" >7 sources</span>
+        </div>
+        <div class="surface__body">
+          <div class="k-list">
+        <div class="k-row">
+          <span>Fills traced</span>
+          <strong><span class="mono">1</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Operator actions</span>
+          <strong><span class="mono">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Runtime events</span>
+          <strong><span class="mono">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Trace coverage</span>
+          <strong><span class="mono">2</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Benchmark</span>
+          <strong>unavailable</strong>
+        </div></div>
+        </div>
+        
+      </article>
+      </div>
+
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Accounting</span>
+            <h2>Tax Estimate</h2>
+          </div>
+          <span class="pill pill--ghost" data-field="tax-estimate-state">estimate only</span>
+        </div>
+        <div class="surface__body">
+          
+      
+      <div class="k-split">
+        <div class="k-list">
+        <div class="k-row">
+          <span>Active lots</span>
+          <strong><span data-field="tax-active-lots" class="mono">1</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Realized lots</span>
+          <strong><span data-field="tax-realized-lots" class="mono">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Lot method</span>
+          <strong><span data-field="tax-lot-method" class="mono">FIFO</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Estimated tax</span>
+          <strong><span data-field="tax-estimated-tax">unavailable</span></strong>
+        </div></div>
+        <div class="k-list">
+        <div class="k-row">
+          <span>Short-term gains</span>
+          <strong><span data-field="tax-short-term-gains">$0.00</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Long-term gains</span>
+          <strong><span data-field="tax-long-term-gains">$0.00</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Total gains</span>
+          <strong><span data-field="tax-total-gains">$0.00</span></strong>
+        </div></div>
+      </div>
+      <p class="microcopy">Research estimate only. Not filing-grade tax accounting.</p>
+    
+        </div>
+        
       </article>
     </section>
-  </main>
+    <section class="screen" data-screen="risk" hidden>
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Risk</span>
+          <h1>Risk is first-class. Severity, exposure, rejections, and the kill switch sit together.</h1>
+          <p>Nothing here is hidden behind advanced settings. The operator can see the state of every guardrail without scrolling.</p>
+        </div>
+      </div>
 
-  <footer class="footer">
-    Generated<span> 2026-05-29T16:00:00+00:00</span>. Paper mode only. No live-money actions are available from this dashboard.
-  </footer>
+      
+      <section class="hero" aria-label="Risk severity">
+        <div class="hero__lead">
+          <span class="hero__label">Risk State</span>
+          <div class="hero__value" style="color: var(--warn);">
+            <span data-field="risk-severity">ATTENTION</span>
+          </div>
+          <div class="hero__delta">
+            <span>1 rejection today</span>
+            <span class="delta-divider">·</span>
+            <span class="mono">MAX_ORDERS_PER_DAY</span>
+            <span class="delta-divider">·</span>
+            <span class="pill pill--ai pill--armed" aria-label="Kill switch OFF">Kill switch OFF</span>
+          </div>
+        </div>
+        <p class="microcopy">
+          Kill switch is the ONE button that stops all paper trading. Use it freely; it cannot harm real capital.
+        </p>
+      </section>
+      <section class="stat-row" aria-label="Risk metrics">
+      <div class="stat stat--warn">
+        <div class="stat__label">Severity</div>
+        <div class="stat__value" >ATTENTION</div>
+        <div class="stat__detail">2 risk decisions today</div>
+      </div>
+      <div class="stat stat--warn">
+        <div class="stat__label">Rejected signals</div>
+        <div class="stat__value" >1</div>
+        <div class="stat__detail">Paper orders refused today</div>
+      </div>
+      <div class="stat stat--warn">
+        <div class="stat__label">Active alerts</div>
+        <div class="stat__value" >1</div>
+        <div class="stat__detail">Operator review needed</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">Drawdown</div>
+        <div class="stat__value" >—</div>
+        <div class="stat__detail">no historical series yet</div>
+      </div></section>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Per-Symbol</span>
+            <h2>Exposure by symbol</h2>
+          </div>
+          <span class="pill pill--warn" >top 100%</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="k-list">
+      <div class="h-bar">
+        <span>SPY</span>
+        <div class="h-bar__track"><div class="h-bar__fill warn" style="width: 100.0%"></div></div>
+        <span class="h-bar__amt">2,500</span>
+      </div></div>
+      <p class="microcopy">
+        Largest position anchors the scale. Cost basis = quantity × average cost. Live mark-to-market arrives with the next snapshot.
+      </p>
+        </div>
+        
+      </article>
+
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Risk Engine</span>
+            <h2>Rejected Signals</h2>
+          </div>
+          <span class="pill pill--warn" >1 blocked</span>
+        </div>
+        <div class="surface__body">
+          <div class="row-list" >
+      <div class="row row--warn">
+        <div class="row__primary"><strong class="mono">MAX_ORDERS_PER_DAY</strong><small>max orders per day would be exceeded</small></div>
+        <div class="row__meta"><span class="mono">daily-order-2</span> · SPY</div>
+        
+      </div></div>
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Runtime Alerts</span>
+            <h2><span data-field="alert-count">1 active</span></h2>
+          </div>
+          <span class="pill pill--warn" data-field="alert-tone">WARN</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="row-list" data-alert-list>
+      <div class="row row--warn">
+        <div class="row__primary"><strong>Risk rejected an order</strong><small>Demo max-orders rule rejected the second paper order.</small></div>
+        <div class="row__meta">risk_rejection</div>
+        <div class="row__value warn">daily-order-2 / SPY / MAX_ORDERS_PER_DAY</div>
+      </div></div>
+      <p class="microcopy">
+        Alerts surface from the runtime journal. They never auto-dismiss — close the underlying condition first.
+      </p>
+        </div>
+        
+      </article>
+      </div>
+
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Operator Controls</span>
+            <h2>Stop everything, safely</h2>
+          </div>
+          <span class="pill pill--ai">Kill OFF</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="k-row">
+        <span>Runtime</span>
+        <strong>
+          <span class="pill pill--ai" data-field="control-state-heading">Armed</span>
+        </strong>
+      </div>
+      <div class="k-row">
+        <span>Kill switch</span>
+        <strong><span class="pill pill--ai pill--armed" data-field="paper-kill-switch-state">Kill OFF</span></strong>
+      </div>
+      
+      <div data-control-grid>
+        <div class="btn-row"><button class="btn" data-control-action="resume_runtime" disabled>Resume runtime</button><button class="btn" data-control-action="pause_runtime">Pause runtime</button><button class="btn" data-control-action="force_reconciliation">Force reconcile</button><button class="btn" data-control-action="generate_report">Generate report</button></div>
+        <p class="microcopy" style="margin-top: 12px;">
+          Arming the kill switch halts all paper order submission. Reversible at any time.
+        </p>
+        <div class="btn-row" style="margin-top: 8px;"><button class="btn btn--danger" data-control-action="enable_paper_kill_switch">Arm Kill Switch</button><button class="btn" data-control-action="disable_paper_kill_switch" disabled>Disarm Kill Switch</button></div>
+      </div>
+      <div class="k-list">
+        <div class="k-row">
+          <span>Last action</span>
+          <strong><span data-field="last-control-action" class="mono">none</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Updated by</span>
+          <strong><span data-field="control-updated-by">system</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Updated at</span>
+          <strong><span data-field="control-updated-at" class="mono">2026-05-29T16:00:00+00:00</span></strong>
+        </div></div>
+        </div>
+        
+      </article>
+    </section>
+    <section class="screen" data-screen="research" hidden>
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Research Lab</span>
+          <h1>Backtests, candidates, and the system's own health.</h1>
+          <p>Nightly learning observes and suggests. The active model never mutates without operator approval.</p>
+        </div>
+      </div>
+
+      
+      <section class="hero" aria-label="Nightly Learning">
+        <div class="hero__lead">
+          <span class="hero__label">Nightly Learning</span>
+          <div class="hero__value mono"><span class="ai-c">+0.0000</span></div>
+          <div class="hero__delta">
+            <span>score delta · challenger minus champion</span>
+            <span class="delta-divider">·</span>
+            <span>champion 0.0505 · challenger 0.0505</span>
+            <span class="delta-divider">·</span>
+            <span><span class="pill pill--ai" >Observed, not promoted</span></span>
+          </div>
+        </div>
+        <div class="hero__chart" aria-label="Champion challenger comparison">
+        <svg class="bar-compare" viewBox="0 0 290 160" role="img" aria-label="Champion challenger score comparison">
+          <rect class="bg" x="0.5" y="0.5" width="289" height="159" rx="10" />
+          
+          <rect class="bar bar-champ" x="40" y="100.0" width="60" height="30.0" rx="3" />
+          <text x="70" y="148" text-anchor="middle">Champion</text>
+          <text x="70" y="94.0" text-anchor="middle" fill="#f4f6f8">0.0505</text>
+          <rect class="bar bar-chal" x="170" y="100.0" width="60" height="30.0" rx="3" />
+          <text x="200" y="148" text-anchor="middle">Challenger</text>
+          <text x="200" y="94.0" text-anchor="middle" fill="#f4f6f8">0.0505</text>
+        </svg></div>
+        <div class="hero__delta">
+          <span class="eyebrow">AI Copilot</span>
+          <span><span class="conf-dots" aria-label="confidence"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span></span>
+          <span class="ai-c mono">AI copilot confidence 0.73</span>
+          <span class="delta-divider">·</span>
+          <span>manual review is required before any model authority changes.</span>
+        </div>
+        <p class="microcopy">AI copilot confidence 0.73; manual review is required before any model authority changes.</p>
+      </section>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Lab Notebook</span>
+            <h2>Research Memo · Active model unchanged</h2>
+          </div>
+          <span class="pill pill--good" >No active mutation</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="memo">
+        Nightly learning compared 1 challenger model(s). 1 candidate(s) were recommended for shadow mode. Active model unchanged: True.
+        <small>Research only · active model unchanged · operator approval required</small>
+      </div>
+      <div class="k-list">
+        <div class="k-row">
+          <span>AI confidence</span>
+          <strong><span class="conf-dots" aria-label="confidence"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span> <span class="ai-c mono">0.73</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Active model state</span>
+          <strong><span class="pos">unchanged</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Recommendations</span>
+          <strong><span class="mono">1</span></strong>
+        </div></div>
+    
+        </div>
+        
+      </article>
+      
+      <section class="stat-row" aria-label="Walk-forward score trends">
+        
+      <div class="stat">
+        <div class="stat__label">Champion walk-forward</div>
+        <div class="stat__value pos">+0.0505</div>
+        <div class="stat__detail">monthly_sector_momentum:1.0.0 · <svg class="spark" viewBox="0 0 80 28" role="img" aria-label="Champion walk-forward fold scores"><path d="M 1.0,1.0 L 79.0,25.0" class="pos" /></svg></div>
+      </div>
+        
+      <div class="stat">
+        <div class="stat__label">Challenger walk-forward</div>
+        <div class="stat__value pos">+0.0505</div>
+        <div class="stat__detail">monthly_sector_momentum:1.1.0-shadow-candidate · <svg class="spark" viewBox="0 0 80 28" role="img" aria-label="Challenger walk-forward fold scores"><path d="M 1.0,1.0 L 79.0,25.0" class="pos" /></svg></div>
+      </div>
+        
+      <div class="stat stat--ai">
+        <div class="stat__label">Fold coverage</div>
+        <div class="stat__value" ><span class="mono">2</span></div>
+        <div class="stat__detail">Walk-forward folds evaluated tonight</div>
+      </div>
+      </section>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Runtime Health</span>
+            <h2>System health · <span data-field="health-status">degraded</span></h2>
+          </div>
+          <span class="pill pill--warn" data-field="health-incident-count">1 incident</span>
+        </div>
+        <div class="surface__body">
+          
+      <p class="surface__summary" data-field="health-summary">Demo paper runtime is healthy except for one risk rejection.</p>
+      <p class="microcopy" data-field="health-report-path">Incident review: not written</p>
+      <div class="grid-2">
+        <div>
+          <div class="k-row">
+            <span>Health Checks</span>
+            <strong data-numeric="1">3</strong>
+          </div>
+          <div class="row-list" data-health-check-list>
+      <div class="row">
+        <div class="row__primary"><strong>runtime_loop</strong><small>Demo runtime heartbeat is fresh.</small></div>
+        
+        <div class="row__value pos">healthy</div>
+      </div>
+      <div class="row">
+        <div class="row__primary"><strong>reconciliation</strong><small>Broker and internal ledger reconciliation is clean.</small></div>
+        
+        <div class="row__value pos">healthy</div>
+      </div>
+      <div class="row">
+        <div class="row__primary"><strong>alerts</strong><small>One demo warning alert is active.</small></div>
+        
+        <div class="row__value warn">degraded</div>
+      </div></div>
+        </div>
+        <div>
+          <div class="k-row">
+            <span>Incident Command</span>
+            <strong data-numeric="1">1</strong>
+          </div>
+          <div class="row-list" data-incident-list>
+      <div class="row row--warn">
+        <div class="row__primary"><strong>Risk rejected an order</strong><small>Demo max-orders rule rejected the second paper order.</small></div>
+        <div class="row__meta">degraded</div>
+        <div class="row__value warn">Review the rejected order before changing strategy.</div>
+      </div></div>
+        </div>
+      </div>
+    
+        </div>
+        
+      </article>
+
+      <p class="microcopy" >Research is observed, not promoted. The active model never mutates without operator approval.</p>
+    </section>
+    <section class="screen" data-screen="ai" hidden>
+      
+      <div class="screen__head" aria-label="AI Governance posture">
+        <div>
+          <span class="eyebrow">AI Governance</span>
+          <h1>Copilot active · operator-approved</h1>
+          <p>
+            <span class="conf-dots" aria-label="confidence"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span>
+            <span class="ai-c mono">&nbsp;0.73</span>
+            &nbsp;·&nbsp;
+            The copilot explains, summarizes, and recommends. Nothing here is autonomous.
+          </p>
+        </div>
+      </div>
+      
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">AI Daily Memo</span>
+            <h2>Reviewed, paper-only</h2>
+          </div>
+          <span class="pill pill--ai" >REVIEWED</span>
+        </div>
+        <div class="surface__body">
+          
+      <div class="memo">
+        Nightly learning compared 1 challenger model(s). 1 candidate(s) were recommended for shadow mode. Active model unchanged: True.
+        <small>Reviewed by operator · paper authority only · no autonomous changes</small>
+      </div>
+        </div>
+        
+      </article>
+
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Functional Readiness</span>
+            <h2><span data-field="completion-status">Awaiting Audit</span></h2>
+          </div>
+          <span class="pill pill--warn" data-field="completion-chip">Review</span>
+        </div>
+        <div class="surface__body">
+          
+          <div class="k-list">
+        <div class="k-row">
+          <span>Proven</span>
+          <strong><span data-field="completion-proven" class="mono">0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Missing</span>
+          <strong><span data-field="completion-missing">unknown</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Failed</span>
+          <strong><span data-field="completion-failed">unknown</span></strong>
+        </div>
+        <div class="k-row">
+          <span>External proof</span>
+          <strong><span data-field="completion-external">required</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Report path</span>
+          <strong><span data-field="completion-path">not written</span></strong>
+        </div></div>
+          <p class="microcopy" data-field="completion-summary">Run the functional completion audit after validation and soak evidence exists.</p>
+        
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Final Acceptance</span>
+            <h2><span data-field="final-acceptance-status">Awaiting Signoff</span></h2>
+          </div>
+          <span class="pill pill--warn" data-field="final-acceptance-chip">Not final</span>
+        </div>
+        <div class="surface__body">
+          
+          <div class="k-list">
+        <div class="k-row">
+          <span>Accepted</span>
+          <strong><span data-field="final-acceptance-accepted">no</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Checks</span>
+          <strong><span data-field="final-acceptance-checks" class="mono">0/0</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Signoff</span>
+          <strong><span data-field="final-acceptance-signoff">missing</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Report path</span>
+          <strong><span data-field="final-acceptance-path">not written</span></strong>
+        </div></div>
+          <p class="microcopy" data-field="final-acceptance-summary">Run final acceptance after operator signoff and reviewed Alpaca Paper evidence.</p>
+        
+        </div>
+        
+      </article>
+      </div>
+
+      <div class="grid-2">
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Reports And Learning</span>
+            <h2><span data-field="report-status">Snapshot</span></h2>
+          </div>
+          <span class="pill pill--ai" >Model locked</span>
+        </div>
+        <div class="surface__body">
+          <div class="k-list">
+        <div class="k-row">
+          <span>Daily report</span>
+          <strong><span data-field="daily-report-state">snapshot</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Report path</span>
+          <strong><span data-field="daily-report-path">not written</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Trading day</span>
+          <strong><span data-field="trading-day" class="mono">2026-05-29</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Nightly learning</span>
+          <strong><span data-field="learning-state">complete</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Learning memo</span>
+          <strong><span data-field="learning-memo-path">not written</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Active mutation</span>
+          <strong><span data-field="active-mutation-state">blocked</span></strong>
+        </div></div>
+        </div>
+        
+      </article>
+        
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Live Readiness</span>
+            <h2><span data-field="live-readiness-panel-status">ready_for_review</span></h2>
+          </div>
+          <span class="pill pill--warn" >Live disabled</span>
+        </div>
+        <div class="surface__body">
+          <div class="k-list">
+        <div class="k-row">
+          <span>Checks passed</span>
+          <strong><span data-field="live-readiness-checks" class="mono">9/9</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Max order</span>
+          <strong><span data-field="live-max-order" class="mono">$250.00</span></strong>
+        </div>
+        <div class="k-row">
+          <span>Approved models</span>
+          <strong><span data-field="live-approved-models" class="mono">1</span></strong>
+        </div></div>
+        </div>
+        <div class="surface__foot">Live trading is intentionally off. The copilot has no path to enable it.</div>
+      </article>
+      </div>
+
+      <p class="microcopy" >AI cannot trade, promote models, or change risk limits. Every change requires human approval.</p>
+    </section>
+        <footer class="footer">
+          Generated<span data-refresh-time> 2026-05-29T16:00:00+00:00</span>. Paper mode only. No live-money actions are available from this dashboard.
+        </footer>
+      </main>
+    </div>
+  </div>
 
 </body>
 </html>
