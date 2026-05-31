@@ -318,3 +318,32 @@ The UI should always:
 The app should feel like stepping into a quiet, neon-lit trading lab where every model is observable, every risk is visible, and every decision can be explained.
 
 It should be breathtaking because it is both beautiful and disciplined.
+
+## Copy Guard Rule
+
+Before any new label, eyebrow, button, microcopy, or empty-state string ships, it must pass the 5-second-friend test:
+
+> *"Would a smart non-finance friend understand what this means in 5 seconds, without me explaining it?"*
+
+If the answer is no, one of the following must be true before the label can ship:
+
+1. **Rewrite it** in plain language. The technical term moves into a `C.glossary(...)` tooltip so power users still have it.
+2. **Replace it** with a question form ("Ready for real money?" beats "Final Acceptance").
+3. **Pair it** with a short microcopy line that explains the term inline.
+
+The rule applies to:
+
+- Every surface eyebrow and title.
+- Every stat label.
+- Every button label (especially destructive ones).
+- Every alert, rejection, or warning message.
+- Every empty state string.
+- Every status pill text where it isn't a number.
+
+The rule does NOT apply to:
+
+- The technical term displayed inside a glossary popover (that's where the jargon belongs).
+- Data values rendered from the snapshot (symbols, paths, IDs).
+- Code paths and `data-field` attribute names.
+
+The single source of truth for plain-language replacements is `src/trading_app/dashboard/glossary.py`. New technical terms should be added there with their plain definition, and referenced via `C.glossary("plain label", key="...")`.

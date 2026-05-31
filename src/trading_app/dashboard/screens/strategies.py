@@ -54,7 +54,7 @@ def _active_strategy_hero(snapshot: OperatorDashboardSnapshot) -> str:
         return C.surface(
             eyebrow="Active Model",
             title="No active strategy assigned",
-            body_html=C.empty("Assign a strategy to begin paper trading."),
+            body_html=C.empty("No strategy is active yet. Assign one to start paper trading and this card will fill with its thesis."),
         )
 
     authority = H.enum_value(definition.authority, "paper")
@@ -227,7 +227,7 @@ def _model_arena(snapshot: OperatorDashboardSnapshot) -> str:
             )
         )
     body = f'<div class="grid-2">{"".join(cards_html)}</div>' if cards_html else C.empty(
-        "No arena comparisons recorded."
+        "No champion-vs-challenger comparisons yet. They appear once a new model is scored against the active one."
     )
     return C.surface(
         eyebrow="Model Arena",
@@ -294,7 +294,7 @@ def _failure_and_ai(snapshot: OperatorDashboardSnapshot) -> str:
         title="When this strategy misses",
         body_html=_honest_rows(
             failure_modes,
-            empty="No failure modes recorded.",
+            empty="No known failure modes recorded for this strategy. The model definition has not listed scenarios where it tends to underperform.",
             attrs="data-active-strategy-failure-list",
             tone="warn",
         ),
@@ -305,7 +305,7 @@ def _failure_and_ai(snapshot: OperatorDashboardSnapshot) -> str:
         title="What the copilot helps with",
         body_html=_honest_rows(
             ai_roles,
-            empty="No AI role recorded.",
+            empty="No AI assistance described for this strategy. The copilot is not currently advising on any part of the decision loop.",
             attrs="data-active-strategy-ai-role-list",
             tone="ai",
         ),

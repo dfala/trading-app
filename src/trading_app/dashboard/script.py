@@ -58,7 +58,7 @@ _SCRIPT = """
     // -----------------------------------------------------------------
     // nav routing — hash-based single-page nav
     // -----------------------------------------------------------------
-    const SCREENS = ['home', 'strategies', 'paper', 'risk', 'research', 'ai'];
+    const SCREENS = ['home', 'strategies', 'paper', 'risk', 'research', 'ai', 'learn'];
 
     function activateScreen(name) {
       const target = SCREENS.includes(name) ? name : 'home';
@@ -796,10 +796,106 @@ _SCRIPT = """
       }
     }
 
+    // -----------------------------------------------------------------
+    // "What's this?" slide-over (Phase C2)
+    // Lists every glossary term visible on the active screen. Opens via
+    // the topbar trigger; re-syncs on hashchange while open; Esc /
+    // backdrop / × all close.
+    // -----------------------------------------------------------------
+    function visibleScreen() {
+      const screens = document.querySelectorAll('[data-screen]');
+      for (const node of screens) {
+        if (!node.hidden) return node;
+      }
+      return document;
+    }
+    function collectWhatsThisEntries() {
+      const scope = visibleScreen();
+      const seen = new Map();
+      scope.querySelectorAll('.glossary').forEach((g) => {
+        // Skip nodes that are inside a hidden ancestor (e.g. vocab mode
+        // suppresses .g-plain / .g-tech siblings but the popover itself
+        // sits at the .glossary root, so the entry is always discoverable
+        // while its host span is visible).
+        const pop = g.querySelector('.glossary__pop');
+        if (!pop) return;
+        const termNode = pop.querySelector('strong');
+        const defNode = pop.querySelector('span');
+        const term = (termNode ? termNode.textContent : '').trim();
+        const definition = (defNode ? defNode.textContent : '').trim();
+        if (!term || !definition) return;
+        const key = term.toLowerCase();
+        if (seen.has(key)) return;
+        seen.set(key, { term, definition });
+      });
+      return Array.from(seen.values());
+    }
+    function renderWhatsThisBody() {
+      const body = document.querySelector('[data-whats-this-body]');
+      if (!body) return;
+      const entries = collectWhatsThisEntries();
+      if (!entries.length) {
+        body.innerHTML = '<p class="empty">No technical terms on this screen.</p>';
+        return;
+      }
+      body.innerHTML = entries.map((entry) => `
+          <div class="whats-this__entry">
+            <strong class="mono">${escapeHtml(entry.term)}</strong>
+            <p>${escapeHtml(entry.definition)}</p>
+          </div>`).join('');
+      const titleNode = document.querySelector('[data-whats-this-title]');
+      const screenTitle = document.querySelector('[data-screen-title]');
+      if (titleNode && screenTitle) {
+        titleNode.textContent = (screenTitle.textContent || 'Glossary').trim();
+      }
+    }
+    function openWhatsThis() {
+      const wrap = document.querySelector('[data-whats-this]');
+      if (!wrap) return;
+      renderWhatsThisBody();
+      wrap.hidden = false;
+      wrap.setAttribute('aria-hidden', 'false');
+      // Force a reflow so the transform transition fires on first open.
+      void wrap.offsetWidth;
+      wrap.dataset.state = 'open';
+    }
+    function closeWhatsThis() {
+      const wrap = document.querySelector('[data-whats-this]');
+      if (!wrap) return;
+      delete wrap.dataset.state;
+      wrap.setAttribute('aria-hidden', 'true');
+      // Honor the 200ms slide-out before fully hiding so the animation
+      // is visible.
+      window.setTimeout(() => {
+        if (!wrap.dataset.state) wrap.hidden = true;
+      }, 200);
+    }
+    function whatsThisOpen() {
+      const wrap = document.querySelector('[data-whats-this]');
+      return Boolean(wrap && wrap.dataset.state === 'open');
+    }
+    function wireWhatsThis() {
+      document.querySelectorAll('[data-whats-this-open]').forEach((btn) => {
+        btn.addEventListener('click', openWhatsThis);
+      });
+      document.querySelectorAll('[data-whats-this-close]').forEach((btn) => {
+        btn.addEventListener('click', closeWhatsThis);
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && whatsThisOpen()) closeWhatsThis();
+      });
+      // Re-sync the body whenever the active screen changes while the
+      // panel is open — the title and term list both follow the route.
+      window.addEventListener('hashchange', () => {
+        if (whatsThisOpen()) renderWhatsThisBody();
+      });
+    }
+
     wireNav();
     wirePeriods();
     wireVocabToggle();
     wireTour();
+    wireWhatsThis();
     refreshDashboardSnapshot();
     window.setInterval(refreshDashboardSnapshot, 5000);
   </script>"""

@@ -235,7 +235,7 @@ def _exposure(snapshot: OperatorDashboardSnapshot) -> str:
         exposures.append((position.symbol, abs(exposure)))
 
     if not exposures:
-        body = C.empty("No open positions, so there is no symbol exposure to draw.")
+        body = C.empty("No positions held, so there is no exposure to chart. Bars will appear once a strategy buys its first symbol.")
         return C.surface(
             eyebrow="Per-Symbol",
             title="Exposure by symbol",
@@ -338,7 +338,7 @@ def _alerts(snapshot: OperatorDashboardSnapshot) -> str:
     tone_text = "ERROR" if has_error else "WARN" if alerts else "CLEAR"
 
     if not alerts:
-        rows_html = C.empty("No active alerts. The runtime is quiet.")
+        rows_html = C.empty("No active alerts. The runtime is quiet — nothing needs your attention right now.")
     else:
         rows = []
         for alert in alerts:

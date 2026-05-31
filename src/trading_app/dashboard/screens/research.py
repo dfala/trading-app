@@ -286,11 +286,11 @@ def _system_health(snapshot: OperatorDashboardSnapshot) -> str:
           <div class="grid-2">
             <div>
               <span class="eyebrow">Health Checks</span>
-              <div class="row-list" data-health-check-list>{C.empty("No health checks yet.")}</div>
+              <div class="row-list" data-health-check-list>{C.empty("No health checks have run yet. They will appear here once the daily runtime cycle completes its system probes.")}</div>
             </div>
             <div>
               <span class="eyebrow">{C.glossary("Active incidents", key="incident_command")}</span>
-              <div class="row-list" data-incident-list>{C.empty("No open incidents.")}</div>
+              <div class="row-list" data-incident-list>{C.empty("No incidents open. The system has nothing to flag right now.")}</div>
             </div>
           </div>
         """
@@ -353,7 +353,7 @@ def _system_health(snapshot: OperatorDashboardSnapshot) -> str:
 def _health_check_rows(health) -> str:
     checks = tuple(H.field(health, "checks", ()) or ())
     if not checks:
-        return C.empty("No health checks yet.")
+        return C.empty("No health checks have run yet. They will appear here once the daily runtime cycle completes its system probes.")
     rows = []
     for check in checks:
         status = H.enum_value(H.field(check, "status"), "unknown")
@@ -379,7 +379,7 @@ def _health_check_rows(health) -> str:
 def _incident_rows(health) -> str:
     incidents = tuple(H.field(health, "incidents", ()) or ())
     if not incidents:
-        return C.empty("No open incidents.")
+        return C.empty("No incidents open. The system has nothing to flag right now.")
     rows = []
     for incident in incidents:
         status = H.enum_value(H.field(incident, "status"), "unknown")

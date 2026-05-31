@@ -18,6 +18,7 @@ from trading_app.dashboard.models import OperatorDashboardSnapshot
 from trading_app.dashboard.screens import (
     ai_review,
     home,
+    learn,
     paper,
     research,
     risk,
@@ -49,6 +50,7 @@ def render_dashboard_html(
             risk.render(snapshot),
             research.render(snapshot),
             ai_review.render(snapshot),
+            learn.render(snapshot),
         ]
     )
 
@@ -79,6 +81,7 @@ def render_dashboard_html(
     </div>
   </div>
   {C.tour()}
+  {C.whats_this_panel()}
 {body_script}
 </body>
 </html>

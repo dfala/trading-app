@@ -1237,6 +1237,174 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
 .ai-c { color: var(--ai); }
 
 /* ============================================================
+   "What's this?" slide-over (Phase C2)
+   Right-anchored drawer that lists every glossary term visible on
+   the active screen. Opens via the topbar trigger; re-syncs on
+   hashchange while open; Esc / backdrop / × all close.
+   ============================================================ */
+
+.whats-this-trigger {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  border: 1px solid var(--line);
+  background: var(--raised);
+  transition: color 80ms linear, border-color 80ms linear,
+              background-color 80ms linear;
+}
+
+.whats-this-trigger:hover,
+.whats-this-trigger:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.45);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.whats-this {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+}
+
+.whats-this[hidden] { display: none; }
+
+.whats-this__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.whats-this[data-state="open"] .whats-this__backdrop {
+  opacity: 1;
+}
+
+.whats-this__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--overlay);
+  border-left: 1px solid rgba(94, 227, 255, 0.32);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.6);
+  transform: translateX(100%);
+  transition: transform 200ms ease;
+}
+
+.whats-this[data-state="open"] .whats-this__panel {
+  transform: translateX(0);
+}
+
+.whats-this__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.whats-this__eyebrow {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--ai);
+  margin-bottom: 6px;
+}
+
+.whats-this__title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--fg);
+}
+
+.whats-this__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--fg-faint);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  transition: color 80ms linear, border-color 80ms linear,
+              background-color 80ms linear;
+}
+
+.whats-this__close:hover,
+.whats-this__close:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.45);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.whats-this__body {
+  overflow-y: auto;
+  padding: 4px 24px 20px;
+  display: grid;
+  gap: 0;
+}
+
+.whats-this__entry {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+
+.whats-this__entry:first-child {
+  border-top: 0;
+}
+
+.whats-this__entry strong {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ai);
+}
+
+.whats-this__entry p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.whats-this__foot {
+  padding: 14px 24px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.whats-this__foot .microcopy {
+  color: var(--fg-faint);
+}
+
+@media (max-width: 620px) {
+  .whats-this__panel {
+    width: calc(100vw - 24px);
+  }
+}
+
+/* ============================================================
    Responsive
    ============================================================ */
 
@@ -1306,6 +1474,10 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
             <span class="nav-item__icon">AI</span>
             <span>AI Review</span>
           </button>
+          <button class="nav-item" data-screen-link="learn" type="button">
+            <span class="nav-item__icon">?</span>
+            <span>Learn</span>
+          </button>
           </nav>
         </div>
         <div></div>
@@ -1328,9 +1500,11 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
             data-title_paper="Paper Trading"
             data-title_risk="Risk"
             data-title_research="Research Lab"
-            data-title_ai="AI Review">Command Center</span>
+            data-title_ai="AI Review"
+            data-title_learn="Learn">Command Center</span>
         </div>
         <div class="topbar__strip">
+          <button type="button" class="whats-this-trigger" data-whats-this-open aria-label="Open glossary for this screen" title="What's on this screen?">What's this?</button>
           <button type="button" class="tour-trigger" data-tour-start aria-label="Open dashboard tour" title="Take the tour">Tour</button>
           <div class="vocab-toggle" role="group" aria-label="Vocabulary"><button type="button" class="vocab-toggle__btn" data-vocab-set="plain" aria-pressed="true" title="Plain language">Plain</button><button type="button" class="vocab-toggle__btn" data-vocab-set="technical" aria-pressed="false" title="Technical terms">Technical</button></div>
           <span data-tour-anchor="mode" style="display: inline-flex; align-items: center; gap: 6px;"><span class="mode mode--paper" data-field="mode">Paper Trading</span><span class="glossary"><button type="button" class="glossary__btn glossary__btn--solo" aria-label="What does Paper Trading mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Paper Trading</strong><span>Fake money only. Every dollar you see here is simulated; no real account is touched.</span></span></span></span>
@@ -1975,7 +2149,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
           <span class="pill pill--ghost" >Idle</span>
         </div>
         <div class="surface__body">
-          <p class="empty">No working orders. Authority is schedule-bound.</p><p class="microcopy" >Strategies place orders at the daily close window only.</p>
+          <p class="empty">No orders are working right now. Strategies only place orders during the scheduled daily-close window.</p><p class="microcopy" >Strategies place orders at the daily close window only.</p>
         </div>
         
       </article>
@@ -2607,6 +2781,364 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
 
       <p class="microcopy" >AI cannot trade, promote models, or change risk limits. Every change requires human approval.</p>
     </section>
+    <section class="screen" data-screen="learn" hidden>
+      
+      <div class="screen__head">
+        <div>
+          <span class="eyebrow">Learn</span>
+          <h1>How to read this dashboard.</h1>
+          <p>A plain-language reference for every technical term in the app. Pick a topic — each entry links to the screen where you'll see it in use.</p>
+        </div>
+      </div>
+      <nav aria-label="Topic index" style="display: flex; flex-wrap: wrap; gap: 8px;"><a class="pill pill--ghost" href="#learn-paper" style="text-decoration: none;">Paper trading</a><a class="pill pill--ghost" href="#learn-risk" style="text-decoration: none;">Risk</a><a class="pill pill--ghost" href="#learn-models" style="text-decoration: none;">Models</a><a class="pill pill--ghost" href="#learn-ai" style="text-decoration: none;">AI</a><a class="pill pill--ghost" href="#learn-dashboard" style="text-decoration: none;">Reading the dashboard</a></nav>
+      <span id="learn-paper"></span>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Paper trading</span>
+            <h2>Terms you'll see in this topic.</h2>
+          </div>
+          <a class="pill pill--ghost" href="#paper" style="text-decoration: none;">See on Paper Trading →</a>
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary">Fake money only. What that means here, and why it&#x27;s the only mode.</p><div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Paper Trading</span><small>Fake money only. Every dollar you see here is simulated; no real account is touched.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Paper Boundary</span><small>The wall between this app and real money. We literally cannot place a live-money order from here.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Live disabled</span><small>Real-money trading is turned off and cannot be turned on from this screen. Even arming the kill switch the wrong way only affects paper orders.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Paper Portfolio</span><small>Your simulated holdings — cash plus the value of any positions. Treat it as practice, not a track record.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Realized P&amp;L</span><small>Profit or loss from positions you&#x27;ve already closed. Open positions don&#x27;t count until you sell.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Open orders</span><small>Orders the broker has accepted but not yet filled. For daily-close strategies, this is usually zero until 4pm ET.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div></div>
+        </div>
+        
+      </article><span id="learn-risk"></span>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Risk</span>
+            <h2>Terms you'll see in this topic.</h2>
+          </div>
+          <a class="pill pill--ghost" href="#risk" style="text-decoration: none;">See on Risk →</a>
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary">What the safety system watches, what severity means, and the kill switch.</p><div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Risk State</span><small>How worried the safety system is right now. OK means everything&#x27;s within limits; ATTENTION means at least one rule fired today.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Drawdown</span><small>The biggest drop from a peak portfolio value. A 10% drawdown means you fell 10% from your highest point — a normal measure of pain.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Exposure</span><small>How much of your money is committed to a single symbol or sector. Concentrated exposure is riskier — if that one thing tanks, you do too.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Rejected signals</span><small>Trades the strategy wanted to place, but the safety system stopped. Each rejection has a reason — read it before changing settings.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Runtime Alerts</span><small>Real-time warnings about things the system thinks you should know — data feed problems, rule violations, anything off-normal.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Kill switch</span><small>The one button that stops all paper trading. Use it freely; it cannot harm real capital because there is no real capital here.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">MAX_ORDERS_PER_DAY</span><small>A safety rule that caps how many orders the strategy can place in a single trading day. Prevents a runaway model from spamming the broker.</small></div>
+        <div class="row__meta"><a href="#risk" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Risk →</a></div>
+        
+      </div></div>
+        </div>
+        
+      </article><span id="learn-models"></span>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Models</span>
+            <h2>Terms you'll see in this topic.</h2>
+          </div>
+          <a class="pill pill--ghost" href="#strategies" style="text-decoration: none;">See on Models →</a>
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary">Strategy vocabulary — from hypothesis through exit, and how we compare candidates.</p><div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Active Model</span><small>The strategy currently allowed to place paper orders. We only run one at a time so behavior is easy to audit.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Hypothesis</span><small>The trading theory the model is built on. Every model starts as a claim about how markets behave that we then test.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Cadence</span><small>How often the model decides whether to trade. &quot;Daily close&quot; means it only acts at the end of each trading day — slow and steady.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Universe</span><small>The list of symbols the model is allowed to pick from. A small, well-understood universe is usually safer than a sprawling one.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Benchmark</span><small>An index — usually SPY (the S&amp;P 500) — we measure returns against. Beating the benchmark over time is the whole game.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Holding period</span><small>How long the model typically keeps a position before selling. Shorter periods mean more trades, more costs, more taxes.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Signal</span><small>How the model decides what to buy. Could be a momentum score, a mean-reversion trigger, anything quantifiable from market data.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Sizing</span><small>How much of your cash the model puts into each position. Equal-weight is the simplest; risk-weighted is more careful.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Exit</span><small>When the model sells. Could be a calendar rule (&quot;sell after 30 days&quot;), a stop loss, or a rebalance signal.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Champion / Challenger</span><small>The current trading model (Champion) versus a candidate we&#x27;re testing (Challenger). We never replace one without proving the new one is meaningfully better.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Shadow candidate</span><small>A model we&#x27;re watching live but not letting trade. It produces would-be signals we can grade without risking anything.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Known Failure Modes</span><small>The specific situations where this model is expected to perform badly. Documented up front so we&#x27;re not surprised when they happen.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">AI Role</span><small>What the AI copilot is allowed to do for this model. It explains, summarizes, and recommends — never trades autonomously.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Score</span><small>A single number that ranks how well a model has been doing in our evaluation system. Higher is better, but the absolute value depends on the metric.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div></div>
+        </div>
+        
+      </article><span id="learn-ai"></span>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">AI</span>
+            <h2>Terms you'll see in this topic.</h2>
+          </div>
+          <a class="pill pill--ghost" href="#ai" style="text-decoration: none;">See on AI Review →</a>
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary">What the copilot does — and what it never does.</p><div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">AI Governance</span><small>The ledger of what the AI did, what it recommended, and what still needs your approval. AI never makes irreversible changes on its own.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">AI confidence</span><small>How sure the AI is about a recommendation, from 0 (no idea) to 1 (very sure). Always treat as advisory — a high number is not a guarantee.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Active mutation</span><small>Whether the currently trading model is in the middle of changing. We block mutations by default so behavior stays predictable.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">AI Daily Memo</span><small>What the AI thought about today&#x27;s activity, written for a human to read. It is advisory; you are still the one who approves changes.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div></div>
+        </div>
+        
+      </article><span id="learn-dashboard"></span>
+      <article class="surface" >
+        
+        <div class="surface__head">
+          <div class="surface__title">
+            <span class="eyebrow">Reading the dashboard</span>
+            <h2>Terms you'll see in this topic.</h2>
+          </div>
+          <a class="pill pill--ghost" href="#home" style="text-decoration: none;">See on Home →</a>
+        </div>
+        <div class="surface__body">
+          <p class="surface__summary">Terms about the dashboard itself — reconciliation, audit trail, readiness.</p><div class="row-list" >
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Reconciliation</span><small>We compare our internal records to the broker&#x27;s every day. &quot;Clean&quot; means they match to the penny; &quot;mismatch&quot; means something&#x27;s off and needs investigating.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Statement Review</span><small>Once the broker sends an official statement, we re-check it against our daily reconciliation. Catches errors the daily check missed.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Audit Trail</span><small>Every trade traced back to the raw data and rule that produced it. If anyone asks &quot;why did we buy this?&quot;, the answer is one click away.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Functional Readiness</span><small>Evidence that every feature in the app has been tested with real data. A checklist of &quot;yes, this works&quot;.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Final Acceptance</span><small>The final operator signoff before this app could ever be used for real-money trading. Multiple safety checks must all pass first.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Live Readiness</span><small>A separate evaluation of whether the app is technically ready to trade real money. Right now this is always &quot;disabled&quot;.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Runtime Proof</span><small>Evidence that the trading loop actually ran today — prices refreshed, broker synced, orders submitted, fills applied.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Incident Command</span><small>Active operational problems the system has noticed. Each comes with a suggested action and a severity level.</small></div>
+        <div class="row__meta"><a href="#ai" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on AI Review →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Data Quality Evidence</span><small>How trustworthy today&#x27;s market data is. Warning means the data is fine for research but not for live trading decisions.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">IEX development-grade feed</span><small>Free market data from the IEX exchange. Good for testing but missing ticks from other exchanges — don&#x27;t bet real money on it.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Tax lots</span><small>Each batch of shares you bought is a &quot;lot&quot; with its own cost basis. When you sell, the lot you pick determines the gain or loss.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">FIFO</span><small>First-In, First-Out — the oldest lot is sold first. The simplest method and the default for most brokers.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Realized gains</span><small>Profit (or loss) on shares you&#x27;ve actually sold. Open positions don&#x27;t realize anything — only closing trades do.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Short-term vs long-term gains</span><small>Gains on positions held under 1 year are taxed at higher rates than those held 1 year or longer. This estimate is research-only.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Nightly Learning</span><small>After each trading day we re-evaluate candidate models against the active one. If a candidate is meaningfully better, we&#x27;ll recommend it — but never replace anything without your approval.</small></div>
+        <div class="row__meta"><a href="#research" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Research Lab →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Walk-forward</span><small>Testing a model by re-fitting it on rolling windows of history and scoring it on the next window. More honest than a single backtest because it can&#x27;t peek at the future.</small></div>
+        <div class="row__meta"><a href="#research" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Research Lab →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Research memo</span><small>The AI&#x27;s nightly written summary of what it studied, what it found, and what it recommends. Written to be read by a human, not parsed by a machine.</small></div>
+        <div class="row__meta"><a href="#research" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Research Lab →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Score delta</span><small>How much better (or worse) the challenger scored than the current champion. Positive means the challenger looks better — but &quot;better&quot; needs more than one number.</small></div>
+        <div class="row__meta"><a href="#research" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Research Lab →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Latest Prices</span><small>The most recent prices the system has on file for tracked symbols. Stale prices are flagged so you know not to trust them.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Operator Controls</span><small>Buttons that let you pause trading, arm the kill switch, force a broker reconciliation, or save today&#x27;s report.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Model Arena</span><small>Where current and candidate strategies are scored side by side. Promotion never happens automatically — the operator decides.</small></div>
+        <div class="row__meta"><a href="#strategies" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Models →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Reports And Learning</span><small>Where today&#x27;s report was saved and whether nightly learning produced any new recommendations.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Tax Estimate</span><small>A rough estimate of what taxes might look like on closed positions. Research-only — not filing-grade accounting.</small></div>
+        <div class="row__meta"><a href="#paper" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Paper Trading →</a></div>
+        
+      </div>
+      <div class="row">
+        <div class="row__primary"><span class="mono" style="font-size: 13px; color: var(--fg);">Daily Report</span><small>The system&#x27;s summary of every trade decision today — accepted, rejected, and why. The audit record for one trading day.</small></div>
+        <div class="row__meta"><a href="#home" style="color: var(--ai); text-decoration: none; font-size: 12px;">See on Home →</a></div>
+        
+      </div></div>
+        </div>
+        
+      </article>
+      <p class="microcopy" >Definitions are also available as ? tooltips next to any technical term in the app. Plain / Technical switches the label; the meaning is unchanged.</p>
+    </section>
         <footer class="footer">
           Generated<span data-refresh-time> 2026-05-29T16:00:00+00:00</span>. Paper mode only. No live-money actions are available from this dashboard.
         </footer>
@@ -2657,6 +3189,24 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
           </footer>
         </article>
     </div>
+  
+    <aside class="whats-this" data-whats-this hidden aria-hidden="true" aria-label="Glossary for this screen">
+      <div class="whats-this__backdrop" data-whats-this-close></div>
+      <div class="whats-this__panel">
+        <header class="whats-this__head">
+          <div>
+            <span class="whats-this__eyebrow">What's on this screen</span>
+            <h3 class="whats-this__title" data-whats-this-title>Glossary</h3>
+          </div>
+          <button type="button" class="whats-this__close" data-whats-this-close
+                  aria-label="Close glossary panel">×</button>
+        </header>
+        <div class="whats-this__body" data-whats-this-body></div>
+        <footer class="whats-this__foot">
+          <p class="microcopy">Definitions on this screen update as you navigate.</p>
+        </footer>
+      </div>
+    </aside>
 
 </body>
 </html>

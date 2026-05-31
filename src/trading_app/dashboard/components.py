@@ -510,6 +510,7 @@ _NAV = [
     ("risk", "Risk", "R"),
     ("research", "Research", "L"),
     ("ai", "AI Review", "AI"),
+    ("learn", "Learn", "?"),
 ]
 
 
@@ -565,15 +566,55 @@ def top_bar(*, mode: str, generated_at: str) -> str:
             data-title_paper="Paper Trading"
             data-title_risk="Risk"
             data-title_research="Research Lab"
-            data-title_ai="AI Review">Command Center</span>
+            data-title_ai="AI Review"
+            data-title_learn="Learn">Command Center</span>
         </div>
         <div class="topbar__strip">
+          {whats_this_button()}
           {tour_button()}
           {vocab_toggle()}
           {mode_badge(mode)}
           <span class="topbar__time"><span data-refresh-time> {escape(generated_at)}</span></span>
         </div>
       </header>"""
+
+
+def whats_this_button() -> str:
+    """The topbar trigger for the "What's this?" slide-over (Phase C2)."""
+
+    return (
+        '<button type="button" class="whats-this-trigger" data-whats-this-open '
+        'aria-label="Open glossary for this screen" title="What\'s on this screen?">'
+        "What's this?</button>"
+    )
+
+
+def whats_this_panel() -> str:
+    """Right-anchored slide-over for "What's this?" (Phase C2).
+
+    The shell renders an empty panel; the JS layer fills it with the
+    glossary terms currently visible on the active screen, and re-syncs
+    on every hashchange.
+    """
+
+    return """
+    <aside class="whats-this" data-whats-this hidden aria-hidden="true" aria-label="Glossary for this screen">
+      <div class="whats-this__backdrop" data-whats-this-close></div>
+      <div class="whats-this__panel">
+        <header class="whats-this__head">
+          <div>
+            <span class="whats-this__eyebrow">What's on this screen</span>
+            <h3 class="whats-this__title" data-whats-this-title>Glossary</h3>
+          </div>
+          <button type="button" class="whats-this__close" data-whats-this-close
+                  aria-label="Close glossary panel">×</button>
+        </header>
+        <div class="whats-this__body" data-whats-this-body></div>
+        <footer class="whats-this__foot">
+          <p class="microcopy">Definitions on this screen update as you navigate.</p>
+        </footer>
+      </div>
+    </aside>"""
 
 
 def tour() -> str:

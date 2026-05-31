@@ -141,7 +141,7 @@ def _positions(snapshot: OperatorDashboardSnapshot) -> str:
     if not positions:
         body = (
             '<div class="row-list" data-position-list>'
-            + C.empty("No open positions. Strategies await the next signal.")
+            + C.empty("No positions held yet. They will appear here after a buy order fills at the next daily-close window.")
             + "</div>"
         )
         pill_html = C.pill("FLAT", tone="ghost")
@@ -212,7 +212,7 @@ def _fills(snapshot: OperatorDashboardSnapshot) -> str:
     if not fills:
         body = (
             '<div class="row-list" data-fill-list>'
-            + C.empty("No fills yet today.")
+            + C.empty("No trades placed today. Strategies look for opportunities at market close (4pm ET) and only act when a candidate clears every safety check.")
             + "</div>"
         )
         pill_html = C.pill("0 today", tone="ghost")
@@ -249,7 +249,7 @@ def _open_orders(snapshot: OperatorDashboardSnapshot) -> str:
     open_count = snapshot.open_orders
     if open_count == 0:
         body = (
-            C.empty("No working orders. Authority is schedule-bound.")
+            C.empty("No orders are working right now. Strategies only place orders during the scheduled daily-close window.")
             + C.microcopy(
                 "Strategies place orders at the daily close window only."
             )

@@ -326,3 +326,153 @@ def get(key: str) -> tuple[str, str] | None:
     """Look up (technical term, plain definition) for a glossary key."""
 
     return GLOSSARY.get(key)
+
+
+# ---------------------------------------------------------------------------
+# Topic index — used by the Learn screen.
+#
+# A small, ordered mapping from a topic key to (heading, blurb, deep-link,
+# [glossary keys]). The Learn screen renders one surface per topic; each
+# row inside reuses the (term, definition) data already in ``GLOSSARY`` so
+# definitions stay single-sourced.
+#
+# Topics are intentionally five. More than that and the page stops feeling
+# like a reference index.
+# ---------------------------------------------------------------------------
+
+
+# topic key -> (heading, one-line blurb, default deep-link, ordered glossary keys)
+TOPICS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
+    "paper": (
+        "Paper trading",
+        "Fake money only. What that means here, and why it's the only mode.",
+        "#paper",
+        (
+            "paper_trading",
+            "paper_boundary",
+            "live_disabled",
+            "paper_portfolio",
+            "realized_pnl",
+            "open_orders",
+        ),
+    ),
+    "risk": (
+        "Risk",
+        "What the safety system watches, what severity means, and the kill switch.",
+        "#risk",
+        (
+            "risk_state",
+            "drawdown",
+            "exposure",
+            "rejected_signals",
+            "runtime_alerts",
+            "kill_switch",
+            "rule_max_orders_per_day",
+        ),
+    ),
+    "models": (
+        "Models",
+        "Strategy vocabulary — from hypothesis through exit, and how we compare candidates.",
+        "#strategies",
+        (
+            "active_model",
+            "hypothesis",
+            "cadence",
+            "universe",
+            "benchmark",
+            "holding_period",
+            "signal_logic",
+            "sizing_logic",
+            "exit_logic",
+            "champion_challenger",
+            "shadow_candidate",
+            "failure_modes",
+            "ai_role",
+            "score",
+        ),
+    ),
+    "ai": (
+        "AI",
+        "What the copilot does — and what it never does.",
+        "#ai",
+        (
+            "ai_governance",
+            "ai_confidence",
+            "active_mutation",
+            "ai_daily_memo",
+        ),
+    ),
+    "dashboard": (
+        "Reading the dashboard",
+        "Terms about the dashboard itself — reconciliation, audit trail, readiness.",
+        "#home",
+        (
+            "reconciliation",
+            "statement_review",
+            "audit_trail",
+            "functional_readiness",
+            "final_acceptance",
+            "live_readiness",
+            "runtime_proof",
+            "incident_command",
+            "data_quality",
+            "iex_dev_grade",
+            "tax_lots",
+            "fifo",
+            "realized_gains",
+            "short_long_term",
+            "nightly_learning",
+            "walk_forward",
+            "research_memo",
+            "score_delta",
+            "latest_prices",
+            "operator_controls",
+            "model_arena",
+            "reports_and_learning",
+            "accounting",
+            "daily_report",
+        ),
+    ),
+}
+
+
+# Per-term deep-link override. Most terms in a topic share the topic's
+# default deep-link; a few belong to a different screen and are pinned
+# here. The Learn screen falls back to the topic default when a key is
+# absent from this map.
+DEEP_LINKS: dict[str, str] = {
+    # Compliance / audit bits — best inspected in the AI Review surface.
+    "audit_trail": "#ai",
+    "functional_readiness": "#ai",
+    "final_acceptance": "#ai",
+    "live_readiness": "#ai",
+    "statement_review": "#ai",
+    "incident_command": "#ai",
+    "reconciliation": "#paper",
+    # Research bits — Research Lab.
+    "nightly_learning": "#research",
+    "walk_forward": "#research",
+    "research_memo": "#research",
+    "score_delta": "#research",
+    "model_arena": "#strategies",
+    # Runtime / home surface bits.
+    "runtime_proof": "#home",
+    "latest_prices": "#home",
+    "data_quality": "#home",
+    "operator_controls": "#home",
+    "iex_dev_grade": "#home",
+    "daily_report": "#home",
+    "reports_and_learning": "#home",
+    # Accounting bits — Paper Trading surface holds the tax estimate.
+    "tax_lots": "#paper",
+    "fifo": "#paper",
+    "realized_gains": "#paper",
+    "short_long_term": "#paper",
+    "accounting": "#paper",
+}
+
+
+def deep_link_for(key: str, topic_default: str) -> str:
+    """Resolve a deep-link for a glossary key, falling back to the topic default."""
+
+    return DEEP_LINKS.get(key, topic_default)

@@ -260,7 +260,7 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
 def _latest_decisions(snapshot: OperatorDashboardSnapshot) -> str:
     explanations = snapshot.daily_report.trade_explanations
     if not explanations:
-        body = C.empty("No decisions have been reviewed today.")
+        body = C.empty("No trade decisions reviewed yet today. They appear here after the daily runtime cycle scores each candidate.")
     else:
         rows = []
         for explanation in explanations[:6]:
@@ -438,7 +438,7 @@ def _data_feed(snapshot: OperatorDashboardSnapshot) -> str:
     else:
         prices_body = (
             '<div class="row-list" data-latest-price-list>'
-            + C.empty("No latest prices available yet.")
+            + C.empty("No live prices yet. Quotes appear once the market-data feed delivers its first snapshot of the day.")
             + "</div>"
         )
 
@@ -471,7 +471,7 @@ def _data_feed(snapshot: OperatorDashboardSnapshot) -> str:
 def _data_quality(snapshot: OperatorDashboardSnapshot) -> str:
     report = snapshot.daily_report.data_quality_report
     if report is None:
-        body = C.empty("No data-quality report attached.")
+        body = C.empty("No data-quality report yet. It will arrive after the next runtime cycle verifies the market data.")
         return C.surface(
             eyebrow=C.glossary("How good is the data?", key="data_quality"),
             title='<span data-field="data-quality-status">unavailable</span>',
@@ -552,7 +552,7 @@ def _quality_window(report) -> str:
 
 def _quality_issue_rows(report) -> str:
     if not report.issues:
-        return C.empty("No quality issues detected.")
+        return C.empty("No data-quality issues today. The market data passed every check.")
     rows = []
     for issue in report.issues[:4]:
         status = H.enum_value(issue.status, "warning")

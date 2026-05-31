@@ -1262,6 +1262,174 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
 .ai-c { color: var(--ai); }
 
 /* ============================================================
+   "What's this?" slide-over (Phase C2)
+   Right-anchored drawer that lists every glossary term visible on
+   the active screen. Opens via the topbar trigger; re-syncs on
+   hashchange while open; Esc / backdrop / × all close.
+   ============================================================ */
+
+.whats-this-trigger {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  border: 1px solid var(--line);
+  background: var(--raised);
+  transition: color 80ms linear, border-color 80ms linear,
+              background-color 80ms linear;
+}
+
+.whats-this-trigger:hover,
+.whats-this-trigger:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.45);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.whats-this {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+}
+
+.whats-this[hidden] { display: none; }
+
+.whats-this__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.whats-this[data-state="open"] .whats-this__backdrop {
+  opacity: 1;
+}
+
+.whats-this__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--overlay);
+  border-left: 1px solid rgba(94, 227, 255, 0.32);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.6);
+  transform: translateX(100%);
+  transition: transform 200ms ease;
+}
+
+.whats-this[data-state="open"] .whats-this__panel {
+  transform: translateX(0);
+}
+
+.whats-this__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.whats-this__eyebrow {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--ai);
+  margin-bottom: 6px;
+}
+
+.whats-this__title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--fg);
+}
+
+.whats-this__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: var(--fg-faint);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  transition: color 80ms linear, border-color 80ms linear,
+              background-color 80ms linear;
+}
+
+.whats-this__close:hover,
+.whats-this__close:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.45);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.whats-this__body {
+  overflow-y: auto;
+  padding: 4px 24px 20px;
+  display: grid;
+  gap: 0;
+}
+
+.whats-this__entry {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+
+.whats-this__entry:first-child {
+  border-top: 0;
+}
+
+.whats-this__entry strong {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ai);
+}
+
+.whats-this__entry p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.whats-this__foot {
+  padding: 14px 24px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.whats-this__foot .microcopy {
+  color: var(--fg-faint);
+}
+
+@media (max-width: 620px) {
+  .whats-this__panel {
+    width: calc(100vw - 24px);
+  }
+}
+
+/* ============================================================
    Responsive
    ============================================================ */
 
