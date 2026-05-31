@@ -29,9 +29,9 @@ def render(snapshot: OperatorDashboardSnapshot) -> str:
     <section class="screen" data-screen="strategies" hidden>
       <div class="screen__head">
         <div>
-          <span class="eyebrow">Models</span>
-          <h1>Inspect and compare trading models.</h1>
-          <p>Every signal answers which model fired, what evidence it used, and how the risk engine reacted.</p>
+          <span class="eyebrow">Your strategies</span>
+          <h1>What's trading on your behalf — and why.</h1>
+          <p>Every trade can be traced back to the strategy that fired it, the data it used, and whether the safety system let it through.</p>
         </div>
       </div>
 
@@ -63,22 +63,22 @@ def _active_strategy_hero(snapshot: OperatorDashboardSnapshot) -> str:
 
     body = f"""
       <div class="hero__lead">
-        <span class="hero__label">Hypothesis</span>
+        <span class="hero__label">{C.glossary("Hypothesis", key="hypothesis")}</span>
         <p class="surface__summary" data-field="active-strategy-hypothesis">{escape(definition.hypothesis)}</p>
       </div>
       <div class="k-list">
         <div class="k-row">
-          <span>Model key</span>
+          <span>Strategy ID</span>
           <strong data-numeric="1"><span data-field="active-strategy-id" class="mono">{model_key}</span></strong>
         </div>
         <div class="k-row">
-          <span>Cadence</span>
+          <span>{C.glossary("Cadence", key="cadence")}</span>
           <strong><span data-field="active-strategy-cadence">{escape(cadence)}</span></strong>
         </div>
       </div>"""
 
     return C.surface(
-        eyebrow="Active Model",
+        eyebrow=C.glossary("Active Model", key="active_model"),
         title=f'<span data-field="active-strategy-name">{escape(definition.name)}</span>',
         body_html=body,
         pill_html=f'<span class="pill pill--ai" data-field="active-strategy-authority">{escape(authority)}</span>',
@@ -101,32 +101,32 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
 
     stats = [
         C.stat(
-            label="Score",
+            label=C.glossary("Score", key="score"),
             value=f'<span class="mono">{score_value}</span>',
-            detail="Champion · arena scoring",
+            detail="Higher is better",
             tone=score_tone,
         ),
         C.stat(
-            label="Cadence",
+            label=C.glossary("Cadence", key="cadence"),
             value=f'<span class="mono">{escape(cadence)}</span>',
-            detail=f"Holding period · {escape(definition.holding_period)}",
+            detail=f"Holds positions for {escape(definition.holding_period)}",
         ),
         C.stat(
-            label="Universe",
+            label=C.glossary("Universe", key="universe"),
             value=(
                 f'<span data-field="active-strategy-universe" class="mono">'
-                f"{universe_count} U.S. ETF(s)</span>"
+                f"{universe_count} U.S. ETFs</span>"
             ),
-            detail="Paper authority only",
+            detail="What it can pick from",
             tone="ai",
         ),
         C.stat(
-            label="Benchmark",
+            label=C.glossary("Benchmark", key="benchmark"),
             value=(
                 f'<span data-field="active-strategy-benchmark" class="mono">'
                 f"{escape(definition.benchmark)}</span>"
             ),
-            detail="Excess return measured vs. this index",
+            detail="Returns compared to this index",
         ),
     ]
     return f'<section class="stat-row" aria-label="Active model metrics">{"".join(stats)}</section>'
@@ -200,8 +200,8 @@ def _model_arena(snapshot: OperatorDashboardSnapshot) -> str:
           {C.microcopy("Promotion requires manual approval. Challenger remains in research authority until reviewed.")}"""
 
         return C.surface(
-            eyebrow="Model Arena",
-            title="Champion / Challenger",
+            eyebrow=C.glossary("Model Arena", key="model_arena"),
+            title=C.glossary("Champion / Challenger", key="champion_challenger"),
             body_html=body,
             pill_html=C.pill(f"recommend · {recommendation}", tone="ai"),
         )
@@ -249,24 +249,24 @@ def _logic_strip(snapshot: OperatorDashboardSnapshot) -> str:
 
     cells = (
         C.surface(
-            eyebrow="Signal",
-            title="How the model enters",
+            eyebrow=C.glossary("Signal", key="signal_logic"),
+            title="How it picks what to buy",
             body_html=(
                 f'<p class="surface__summary" data-field="active-strategy-signal">'
                 f"{escape(definition.signal_logic)}</p>"
             ),
         ),
         C.surface(
-            eyebrow="Sizing",
-            title="How the model allocates",
+            eyebrow=C.glossary("Sizing", key="sizing_logic"),
+            title="How much it buys",
             body_html=(
                 f'<p class="surface__summary" data-field="active-strategy-sizing">'
                 f"{escape(definition.sizing_logic)}</p>"
             ),
         ),
         C.surface(
-            eyebrow="Exit",
-            title="How the model leaves",
+            eyebrow=C.glossary("Exit", key="exit_logic"),
+            title="When it sells",
             body_html=(
                 f'<p class="surface__summary" data-field="active-strategy-exit">'
                 f"{escape(definition.exit_logic)}</p>"
@@ -290,8 +290,8 @@ def _failure_and_ai(snapshot: OperatorDashboardSnapshot) -> str:
     ai_roles = tuple(definition.ai_role[:3])
 
     failures = C.surface(
-        eyebrow="Known Failure Modes",
-        title="Where this model breaks",
+        eyebrow=C.glossary("Known Failure Modes", key="failure_modes"),
+        title="When this strategy misses",
         body_html=_honest_rows(
             failure_modes,
             empty="No failure modes recorded.",
@@ -301,15 +301,15 @@ def _failure_and_ai(snapshot: OperatorDashboardSnapshot) -> str:
         pill_html=C.pill(f"{len(failure_modes)} documented", tone="warn"),
     )
     ai = C.surface(
-        eyebrow="AI Role",
-        title="What the copilot does",
+        eyebrow=C.glossary("AI Role", key="ai_role"),
+        title="What the copilot helps with",
         body_html=_honest_rows(
             ai_roles,
             empty="No AI role recorded.",
             attrs="data-active-strategy-ai-role-list",
             tone="ai",
         ),
-        pill_html=C.pill("copilot · not oracle", tone="ai"),
+        pill_html=C.pill("advisory only", tone="ai"),
     )
     return f'<div class="grid-2">{failures}{ai}</div>'
 

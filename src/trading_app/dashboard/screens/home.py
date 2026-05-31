@@ -22,8 +22,9 @@ def render(snapshot: OperatorDashboardSnapshot) -> str:
     <section class="screen" data-screen="home" hidden>
       <div class="screen__head">
         <div>
-          <span class="eyebrow">Paper Command Center</span>
-          <h1>Live-money actions are disabled. Strategy authority remains schedule-bound.</h1>
+          <span class="eyebrow">{C.glossary("Paper Command Center", key="paper_trading")}</span>
+          <h1>Real-money actions are turned off. Your strategy only acts on its schedule.</h1>
+          <p class="microcopy">Live-money actions are disabled. Strategy authority remains schedule-bound.</p>
         </div>
       </div>
 
@@ -66,14 +67,14 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
     return f"""
       <section class="hero" aria-label="Paper Portfolio">
         <div class="hero__lead">
-          <span class="hero__label">Paper Portfolio</span>
+          <span class="hero__label">{C.glossary("Your portfolio", key="paper_portfolio")}</span>
           <div class="hero__value" data-field="estimated-equity">{equity}</div>
           <div class="hero__delta">
             <span class="{delta_class}">{delta_text}</span>
             <span class="delta-divider">·</span>
             <span>{delta_pct:+.2f}% today</span>
             <span class="delta-divider">·</span>
-            <span>since open</span>
+            <span>since market open</span>
           </div>
         </div>
         <div class="hero__chart" data-hero-chart>{chart}</div>
@@ -112,7 +113,7 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
         C.stat(
             label="Cash",
             value=f'<span data-field="cash">{H.money(snapshot.cash)}</span>',
-            detail="Available in ledger",
+            detail="Available to spend",
         ),
         C.stat(
             label="Day P&L",
@@ -121,15 +122,15 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
             tone=pnl_tone,
         ),
         C.stat(
-            label="Risk State",
+            label="Risk",
             value=f'<span data-field="risk-severity">{escape(risk_severity)}</span>',
             detail=risk_detail,
             tone=risk_tone,
         ),
         C.stat(
-            label="Active models",
+            label="Running strategies",
             value=f"{active_count}",
-            detail="paper authority only",
+            detail="fake-money only",
             tone="ai",
         ),
     ]
@@ -167,8 +168,8 @@ def _latest_decisions(snapshot: OperatorDashboardSnapshot) -> str:
         body = C.row_list(rows)
 
     return C.surface(
-        eyebrow="Daily Report",
-        title="Latest decisions",
+        eyebrow=C.glossary("Today's decisions", key="daily_report"),
+        title="What the strategy did today",
         body_html=body,
         pill_html=C.pill(f"{len(explanations)} reviewed", tone="ghost"),
     )
@@ -199,7 +200,7 @@ def _ai_summary(snapshot: OperatorDashboardSnapshot) -> str:
         </div>
       </div>"""
     return C.surface(
-        eyebrow="AI Daily Memo",
+        eyebrow=C.glossary("What the AI did", key="ai_daily_memo"),
         title="AI is a copilot, not an oracle",
         body_html=body,
         pill_html=C.pill("REVIEWED", tone="ai"),
@@ -256,10 +257,10 @@ def _system_status(snapshot: OperatorDashboardSnapshot) -> str:
         ]
     )
     return C.surface(
-        eyebrow="Runtime Proof",
-        title="System status",
+        eyebrow=C.glossary("System status", key="runtime_proof"),
+        title="What ran today",
         body_html=body,
-        pill_html=C.pill("Daily close only", tone="ai"),
+        pill_html=C.pill("Trades once a day", tone="ai"),
     )
 
 
@@ -293,8 +294,8 @@ def _paper_boundary(snapshot: OperatorDashboardSnapshot) -> str:
         ]
     )
     return C.surface(
-        eyebrow="Paper Boundary",
-        title="Live disabled",
+        eyebrow=C.glossary("This is fake money", key="paper_boundary"),
+        title=C.glossary("Live disabled", key="live_disabled"),
         body_html=body,
         pill_html=C.pill("Paper only", tone="good"),
     )
@@ -336,7 +337,7 @@ def _data_feed(snapshot: OperatorDashboardSnapshot) -> str:
     warning = f"""<p class="microcopy" data-field="price-warning">{escape(latest["warning"])}</p>"""
 
     prices_surface = C.surface(
-        eyebrow="Latest Prices",
+        eyebrow=C.glossary("Latest Prices", key="latest_prices"),
         title=f"Market data · {feed_status}",
         body_html=f"""
           <div class="k-row">
@@ -358,7 +359,7 @@ def _data_quality(snapshot: OperatorDashboardSnapshot) -> str:
     if report is None:
         body = C.empty("No data-quality report attached.")
         return C.surface(
-            eyebrow="Data Quality Evidence",
+            eyebrow=C.glossary("How good is the data?", key="data_quality"),
             title='<span data-field="data-quality-status">unavailable</span>',
             body_html=body,
             pill_html=f'<span class="pill pill--warn" data-field="data-quality-chip">unavailable</span>',
@@ -416,7 +417,7 @@ def _data_quality(snapshot: OperatorDashboardSnapshot) -> str:
         {_quality_issue_rows(report)}
       </div>"""
     return C.surface(
-        eyebrow="Data Quality Evidence",
+        eyebrow=C.glossary("How good is the data?", key="data_quality"),
         title=f'<span data-field="data-quality-status">{escape(status)}</span>',
         body_html=body,
         pill_html=f'<span class="pill pill--{tone}" data-field="data-quality-chip">{escape(status)}</span>',

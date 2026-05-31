@@ -66,13 +66,13 @@ def _hero(snapshot: OperatorDashboardSnapshot) -> str:
     return f"""
       <div class="screen__head" aria-label="AI Governance posture">
         <div>
-          <span class="eyebrow">AI Governance</span>
+          <span class="eyebrow">{C.glossary("AI oversight", key="ai_governance")}</span>
           <h1>{escape(headline)}</h1>
           <p>
             {dots}
             <span class="ai-c mono">&nbsp;{confidence_text}</span>
             &nbsp;·&nbsp;
-            The copilot explains, summarizes, and recommends. Nothing here is autonomous.
+            The AI explains, summarizes, and recommends. It never trades or changes anything on its own.
           </p>
         </div>
       </div>"""
@@ -124,7 +124,7 @@ def _completion_audit(snapshot: OperatorDashboardSnapshot) -> str:
           <p class="microcopy" data-field="completion-summary">Run the functional completion audit after validation and soak evidence exists.</p>
         """
         return C.surface(
-            eyebrow="Functional Readiness",
+            eyebrow=C.glossary("Health check evidence", key="functional_readiness"),
             title='<span data-field="completion-status">Awaiting Audit</span>',
             body_html=body,
             pill_html='<span class="pill pill--warn" data-field="completion-chip">Review</span>',
@@ -174,7 +174,7 @@ def _final_acceptance(snapshot: OperatorDashboardSnapshot) -> str:
           <p class="microcopy" data-field="final-acceptance-summary">Run final acceptance after operator signoff and reviewed Alpaca Paper evidence.</p>
         """
         return C.surface(
-            eyebrow="Final Acceptance",
+            eyebrow=C.glossary("Ready for real money?", key="final_acceptance"),
             title='<span data-field="final-acceptance-status">Awaiting Signoff</span>',
             body_html=body,
             pill_html='<span class="pill pill--warn" data-field="final-acceptance-chip">Not final</span>',
@@ -255,7 +255,7 @@ def _reports_and_learning(snapshot: OperatorDashboardSnapshot) -> str:
         ]
     )
     return C.surface(
-        eyebrow="Reports And Learning",
+        eyebrow=C.glossary("Daily report status", key="reports_and_learning"),
         title=f'<span data-field="report-status">{H.report_heading(snapshot)}</span>',
         body_html=body,
         pill_html=C.pill(
@@ -287,7 +287,7 @@ def _live_readiness(snapshot: OperatorDashboardSnapshot) -> str:
             ]
         )
         return C.surface(
-            eyebrow="Live Readiness",
+            eyebrow=C.glossary("Ready for live trading?", key="live_readiness"),
             title='<span data-field="live-readiness-panel-status">disabled</span>',
             body_html=body,
             pill_html=C.pill("Live disabled", tone="warn"),
@@ -321,7 +321,7 @@ def _live_readiness(snapshot: OperatorDashboardSnapshot) -> str:
         ]
     )
     return C.surface(
-        eyebrow="Live Readiness",
+        eyebrow=C.glossary("Ready for live trading?", key="live_readiness"),
         title=f'<span data-field="live-readiness-panel-status">{escape(status)}</span>',
         body_html=body,
         pill_html=C.pill("Live disabled", tone="warn"),

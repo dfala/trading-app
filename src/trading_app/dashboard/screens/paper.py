@@ -100,24 +100,24 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
         C.stat(
             label="Cash",
             value=H.money(snapshot.cash),
-            detail="Available in paper ledger",
+            detail="Money available to spend",
         ),
         C.stat(
-            label="Open orders",
+            label=C.glossary("Open orders", key="open_orders"),
             value=str(snapshot.open_orders),
-            detail="Awaiting broker fill",
+            detail="Sent to the broker, not yet filled",
             tone="ai" if snapshot.open_orders > 0 else "",
         ),
         C.stat(
-            label="Realized P&L",
+            label=C.glossary("Realized P&L", key="realized_pnl"),
             value=H.money(snapshot.realized_pnl),
-            detail="Closed lots, paper currency",
+            detail="From positions you've already closed",
             tone=pnl_tone,
         ),
         C.stat(
             label="Positions",
             value=str(len(positions)),
-            detail="Symbols currently held",
+            detail="Different symbols you currently hold",
         ),
     ]
     return (
@@ -297,7 +297,7 @@ def _statement_review(snapshot: OperatorDashboardSnapshot) -> str:
           <p class="microcopy" data-field="statement-caveat">Paper/research-only review. Not filing-grade tax accounting.</p>
         """
         return C.surface(
-            eyebrow="Statement Review",
+            eyebrow=C.glossary("Broker statement vs our records", key="statement_review"),
             title='<span data-field="statement-status">Awaiting Statement</span>',
             body_html=body,
             pill_html=f'<span class="pill pill--warn" data-field="statement-chip">Post-run</span>',
@@ -321,7 +321,7 @@ def _statement_review(snapshot: OperatorDashboardSnapshot) -> str:
       <p class="microcopy" data-field="statement-caveat">Paper/research-only review. Not filing-grade tax accounting.</p>
     """
     return C.surface(
-        eyebrow="Statement Review",
+        eyebrow=C.glossary("Broker statement vs our records", key="statement_review"),
         title=f'<span data-field="statement-status">{"Reconciled" if reconciled else "Mismatch"}</span>',
         body_html=body,
         pill_html=f'<span class="pill pill--{tone}" data-field="statement-chip">{chip_text}</span>',
@@ -375,8 +375,8 @@ def _audit_trail(snapshot: OperatorDashboardSnapshot) -> str:
         ]
     )
     return C.surface(
-        eyebrow="Audit Trail",
-        title="Provenance",
+        eyebrow=C.glossary("Where the numbers came from", key="audit_trail"),
+        title="Audit Trail",
         body_html=body,
         pill_html=C.pill(f"{evidence_sources} sources", tone="ai"),
     )
@@ -396,15 +396,15 @@ def _tax_estimate(snapshot: OperatorDashboardSnapshot) -> str:
     state_text = "available" if tax.tax_estimate_available else "estimate only"
     left = [
         (
-            "Active lots",
+            C.glossary("Open lots", key="tax_lots"),
             f'<span data-field="tax-active-lots" class="mono">{tax.active_lot_count}</span>',
         ),
         (
-            "Realized lots",
+            "Closed lots",
             f'<span data-field="tax-realized-lots" class="mono">{tax.realized_lot_count}</span>',
         ),
         (
-            "Lot method",
+            C.glossary("Lot method", key="fifo"),
             f'<span data-field="tax-lot-method" class="mono">{escape(H.enum_value(tax.lot_method, "fifo").upper())}</span>',
         ),
         (
@@ -414,7 +414,7 @@ def _tax_estimate(snapshot: OperatorDashboardSnapshot) -> str:
     ]
     right = [
         (
-            "Short-term gains",
+            C.glossary("Short-term gains", key="short_long_term"),
             f'<span data-field="tax-short-term-gains">{H.money(tax.short_term_realized_gains)}</span>',
         ),
         (
@@ -432,7 +432,7 @@ def _tax_estimate(snapshot: OperatorDashboardSnapshot) -> str:
     """
     return C.surface(
         eyebrow="Accounting",
-        title="Tax Estimate",
+        title=C.glossary("Tax Estimate", key="accounting"),
         body_html=body,
         pill_html=f'<span class="pill pill--{tone}" data-field="tax-estimate-state">{state_text}</span>',
     )

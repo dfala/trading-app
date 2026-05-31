@@ -813,6 +813,90 @@ button {
 }
 
 /* ============================================================
+   Glossary — plain-language label with `?` popover
+   ============================================================ */
+
+.glossary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: baseline;
+}
+
+.glossary__btn {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--fg-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: help;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  padding: 0;
+  line-height: 1;
+  transition: color 80ms linear, border-color 80ms linear, background-color 80ms linear;
+}
+
+.glossary__btn:hover,
+.glossary__btn:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.55);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.glossary__pop {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  text-align: left;
+  white-space: normal;
+}
+
+.glossary__pop strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ai);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.glossary:hover .glossary__pop,
+.glossary:focus-within .glossary__pop {
+  display: block;
+}
+
+/* When the popover would overflow the right edge, anchor it from the right */
+.glossary[data-pop="end"] .glossary__pop {
+  left: auto;
+  right: 0;
+}
+
+/* ============================================================
    AI / confidence
    ============================================================ */
 

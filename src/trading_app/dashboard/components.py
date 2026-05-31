@@ -24,6 +24,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from html import escape
 
+from trading_app.dashboard import glossary as _glossary
+
 
 Tone = str  # "good" | "warn" | "danger" | "ai" | "ghost"
 
@@ -59,10 +61,13 @@ def surface(
     """Render the single card primitive. No nested surfaces allowed."""
 
     klass = f"surface {extra_class}".strip()
+    # ``eyebrow`` accepts raw HTML so glossary() spans can be embedded.
+    # Callers passing plain text don't need to escape — none of the labels
+    # in this app contain HTML-sensitive characters.
     head = f"""
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">{escape(eyebrow)}</span>
+            <span class="eyebrow">{eyebrow}</span>
             <h2>{title}</h2>
           </div>
           {pill_html}
@@ -90,9 +95,10 @@ def stat(
 
     klass = f"stat {_TONE_TO_STAT.get(tone, '')}".strip()
     detail_html = f'<div class="stat__detail">{detail}</div>' if detail else ""
+    # ``label`` accepts raw HTML so glossary() spans can be embedded.
     return f"""
       <div class="{klass}">
-        <div class="stat__label">{escape(label)}</div>
+        <div class="stat__label">{label}</div>
         <div class="stat__value" {value_attrs}>{value}</div>
         {detail_html}
       </div>"""
@@ -109,11 +115,21 @@ def pill(text: str, tone: Tone = "ghost", *, attrs: str = "", armed: bool = Fals
 
 
 def mode_badge(mode: str) -> str:
-    """The ever-present paper-vs-live badge. Sits in the top bar."""
+    """The ever-present paper-vs-live badge. Sits in the top bar.
+
+    A glossary ``?`` sits beside the badge so a beginner can find out what
+    "paper trading" means without leaving the screen. The JS layer rewrites
+    the badge's text on snapshot refresh; the sibling ``?`` survives.
+    """
 
     is_paper = "paper" in mode.casefold()
     klass = "mode mode--paper" if is_paper else "mode mode--live"
-    return f'<span class="{klass}" data-field="mode">{escape(mode)}</span>'
+    return (
+        f'<span style="display: inline-flex; align-items: center; gap: 6px;">'
+        f'<span class="{klass}" data-field="mode">{escape(mode)}</span>'
+        f"{glossary_icon(key='paper_trading')}"
+        f"</span>"
+    )
 
 
 def confidence_dots(score: float | None) -> str:
@@ -135,10 +151,11 @@ def k_list(rows: Iterable[tuple[str, str]], *, numeric: bool = False) -> str:
     parts = []
     for label, value in rows:
         num_attr = ' data-numeric="1"' if numeric else ""
+        # Labels accept raw HTML so callers can embed glossary() spans.
         parts.append(
             f"""
         <div class="k-row">
-          <span>{escape(label)}</span>
+          <span>{label}</span>
           <strong{num_attr}>{value}</strong>
         </div>"""
         )
@@ -197,6 +214,74 @@ def microcopy(text: str, *, attrs: str = "") -> str:
     """Footnote-style text."""
 
     return f'<p class="microcopy" {attrs}>{escape(text)}</p>'
+
+
+# ---------------------------------------------------------------------------
+# Glossary — plain language with a ringed `?` tooltip
+# ---------------------------------------------------------------------------
+
+
+def glossary(
+    text: str = "",
+    *,
+    key: str | None = None,
+    definition: str | None = None,
+    term: str | None = None,
+) -> str:
+    """Render ``text`` followed by a ringed ``?`` button that reveals a popover.
+
+    The popover shows the *technical term* in cyan small caps over the *plain
+    definition*. Two common patterns:
+
+    - ``glossary("Where your money is", key="exposure")`` — the visible label is
+      plain English; the technical term ("Exposure") appears in the tooltip.
+    - ``glossary("Drawdown", key="drawdown")`` — the visible label is the
+      technical term itself; the tooltip just defines it.
+
+    If ``key`` is None, pass ``term`` and ``definition`` directly for one-off
+    explanations.
+
+    With ``text=""`` the helper renders a standalone ``?`` icon (used in places
+    like the kill-switch pill where the label is owned by the JS layer).
+    """
+
+    if key:
+        entry = _glossary.get(key)
+        if entry is None:
+            term_value, def_value = "", ""
+        else:
+            term_value, def_value = entry
+    else:
+        term_value = term or ""
+        def_value = definition or ""
+
+    if not def_value:
+        return escape(text) if text else ""
+
+    term_html = (
+        f'<strong>{escape(term_value)}</strong>' if term_value else ""
+    )
+    def_html = f"<span>{escape(def_value)}</span>"
+    aria_label = (
+        f"What does {term_value or text} mean?".strip() if (term_value or text) else "Definition"
+    )
+    label_html = escape(text) if text else ""
+    icon_class = "glossary__btn" if text else "glossary__btn glossary__btn--solo"
+
+    return (
+        f'<span class="glossary">'
+        f"{label_html}"
+        f'<button type="button" class="{icon_class}" '
+        f'aria-label="{escape(aria_label)}" tabindex="0">?</button>'
+        f'<span class="glossary__pop" role="tooltip">{term_html}{def_html}</span>'
+        f"</span>"
+    )
+
+
+def glossary_icon(*, key: str | None = None, definition: str | None = None, term: str | None = None) -> str:
+    """Standalone ``?`` icon — same popover, no visible label."""
+
+    return glossary("", key=key, definition=definition, term=term)
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +474,10 @@ def left_rail(*, broker: str, kill_switch_armed: bool) -> str:
         <div></div>
         <div class="rail__foot">
           <strong data-field="broker">{escape(broker)}</strong>
-          <span data-field="kill-switch" class="{kill_class}">{kill_label}</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span data-field="kill-switch" class="{kill_class}">{kill_label}</span>
+            {glossary_icon(key='kill_switch')}
+          </span>
         </div>
       </aside>"""
 

@@ -46,6 +46,30 @@ _SEVERITY_HERO_COLOR = {
     "danger": "var(--neg)",
 }
 
+# Known risk-rule names mapped to their glossary keys. Rules not in this map
+# render with the raw name and no popover — better an honest "unknown" than
+# a wrong definition.
+_RULE_GLOSSARY_KEYS: dict[str, str] = {
+    "MAX_ORDERS_PER_DAY": "rule_max_orders_per_day",
+}
+
+
+def _humanize_rejection(rule_name: str, raw_message: str) -> str:
+    """Two-sentence plain-language rewrite of a rejection message.
+
+    Sentence 1: what happened (in user terms). Sentence 2: what it means.
+    Unknown rules pass through the raw message unchanged.
+    """
+
+    rewrites = {
+        "MAX_ORDERS_PER_DAY": (
+            "We didn't place this trade — you've already hit today's order "
+            "limit. This is a safety rule that prevents a runaway strategy "
+            "from spamming the broker."
+        ),
+    }
+    return rewrites.get(rule_name, raw_message)
+
 
 def render(snapshot: OperatorDashboardSnapshot) -> str:
     return f"""
@@ -53,8 +77,8 @@ def render(snapshot: OperatorDashboardSnapshot) -> str:
       <div class="screen__head">
         <div>
           <span class="eyebrow">Risk</span>
-          <h1>Risk is first-class. Severity, exposure, rejections, and the kill switch sit together.</h1>
-          <p>Nothing here is hidden behind advanced settings. The operator can see the state of every guardrail without scrolling.</p>
+          <h1>Your safety net, in one place.</h1>
+          <p>How risky things are right now, what trades were blocked, where your money is, and the one button that stops it all.</p>
         </div>
       </div>
 
@@ -115,7 +139,7 @@ def _severity_hero(snapshot: OperatorDashboardSnapshot) -> str:
     return f"""
       <section class="hero" aria-label="Risk severity">
         <div class="hero__lead">
-          <span class="hero__label">Risk State</span>
+          <span class="hero__label">{C.glossary("Risk State", key="risk_state")}</span>
           <div class="hero__value" style="color: {color};">
             <span data-field="risk-severity">{escape(severity_text)}</span>
           </div>
@@ -128,7 +152,7 @@ def _severity_hero(snapshot: OperatorDashboardSnapshot) -> str:
           </div>
         </div>
         <p class="microcopy">
-          Kill switch is the ONE button that stops all paper trading. Use it freely; it cannot harm real capital.
+          The {C.glossary("kill switch", key="kill_switch")} is the one button that stops all paper trading. Press it whenever you want — it cannot affect real money.
         </p>
       </section>"""
 
@@ -167,27 +191,27 @@ def _stat_row(snapshot: OperatorDashboardSnapshot) -> str:
 
     stats = [
         C.stat(
-            label="Severity",
+            label="How worried we are",
             value=escape(severity_text),
-            detail=f"{risk.risk_decisions} risk decisions today",
+            detail=f"{risk.risk_decisions} trades checked today",
             tone=severity_stat_tone,
         ),
         C.stat(
-            label="Rejected signals",
+            label=C.glossary("Trades blocked", key="rejected_signals"),
             value=f"{rejections}",
             detail=rejection_detail,
             tone=rejection_tone,
         ),
         C.stat(
-            label="Active alerts",
+            label="Active warnings",
             value=f"{alert_count}",
             detail=alert_detail,
             tone=alert_tone,
         ),
         C.stat(
-            label="Drawdown",
+            label=C.glossary("Drawdown", key="drawdown"),
             value="—",
-            detail="no historical series yet",
+            detail="No history yet",
         ),
     ]
     return (
@@ -243,7 +267,7 @@ def _exposure(snapshot: OperatorDashboardSnapshot) -> str:
     largest_share = (exposures[0][1] / total) * 100.0 if total else 0.0
     pill_tone = "warn" if largest_share >= 60.0 else "ai"
     return C.surface(
-        eyebrow="Per-Symbol",
+        eyebrow=C.glossary("Where your money is", key="exposure"),
         title="Exposure by symbol",
         body_html=body,
         pill_html=C.pill(f"top {largest_share:.0f}%", tone=pill_tone),
@@ -264,20 +288,28 @@ def _rejected_signals(snapshot: OperatorDashboardSnapshot) -> str:
     row_tone = "danger" if severity_tone == "danger" else "warn"
 
     if not rejected:
-        body = C.empty("No signals were rejected today. The risk engine is quiet.")
+        body = C.empty("No trades were blocked today. The safety system is quiet.")
         pill_html = C.pill("clean", tone="good")
     else:
-        rows = [
-            C.row(
-                primary=(
-                    f'<strong class="mono">{escape(item.rule.value)}</strong>'
-                ),
-                primary_sub=escape(item.message),
-                meta=f'<span class="mono">{escape(item.order_id)}</span> · {escape(item.symbol)}',
-                tone=row_tone,
+        rows = []
+        for item in rejected:
+            rule_name = item.rule.value
+            # Wrap known rule names with their glossary explanation
+            glossary_key = _RULE_GLOSSARY_KEYS.get(rule_name)
+            rule_html = (
+                C.glossary(rule_name, key=glossary_key)
+                if glossary_key
+                else escape(rule_name)
             )
-            for item in rejected
-        ]
+            plain_message = _humanize_rejection(rule_name, item.message)
+            rows.append(
+                C.row(
+                    primary=f'<strong class="mono">{rule_html}</strong>',
+                    primary_sub=escape(plain_message),
+                    meta=f'<span class="mono">{escape(item.order_id)}</span> · {escape(item.symbol)}',
+                    tone=row_tone,
+                )
+            )
         body = C.row_list(rows)
         pill_html = C.pill(
             f"{len(rejected)} blocked",
@@ -285,7 +317,7 @@ def _rejected_signals(snapshot: OperatorDashboardSnapshot) -> str:
         )
 
     return C.surface(
-        eyebrow="Risk Engine",
+        eyebrow=C.glossary("Trades the safety system blocked", key="rejected_signals"),
         title="Rejected Signals",
         body_html=body,
         pill_html=pill_html,
@@ -335,7 +367,7 @@ def _alerts(snapshot: OperatorDashboardSnapshot) -> str:
         Alerts surface from the runtime journal. They never auto-dismiss — close the underlying condition first.
       </p>"""
     return C.surface(
-        eyebrow="Runtime Alerts",
+        eyebrow=C.glossary("System warnings", key="runtime_alerts"),
         title=f'<span data-field="alert-count">{len(alerts)} active</span>',
         body_html=body,
         pill_html=(
@@ -393,22 +425,22 @@ def _operator_controls(snapshot: OperatorDashboardSnapshot) -> str:
 
     # Group A — safe runtime controls.
     safe_buttons = [
-        _btn("resume_runtime", "Resume runtime", disabled=not paused),
-        _btn("pause_runtime", "Pause runtime", disabled=paused),
-        _btn("force_reconciliation", "Force reconcile", disabled=False),
-        _btn("generate_report", "Generate report", disabled=False),
+        _btn("resume_runtime", "Resume trading", disabled=not paused),
+        _btn("pause_runtime", "Pause trading", disabled=paused),
+        _btn("force_reconciliation", "Re-check vs broker", disabled=False),
+        _btn("generate_report", "Save today's summary", disabled=False),
     ]
     # Group B — destructive, visually separated.
     destructive_buttons = [
         _btn(
             "enable_paper_kill_switch",
-            "Arm Kill Switch",
+            "Stop all paper trading",
             disabled=kill_switch,
             danger=True,
         ),
         _btn(
             "disable_paper_kill_switch",
-            "Disarm Kill Switch",
+            "Re-enable trading",
             disabled=not kill_switch,
         ),
     ]
@@ -420,7 +452,7 @@ def _operator_controls(snapshot: OperatorDashboardSnapshot) -> str:
       <div data-control-grid>
         <div class="btn-row">{"".join(safe_buttons)}</div>
         <p class="microcopy" style="margin-top: 12px;">
-          Arming the kill switch halts all paper order submission. Reversible at any time.
+          Stopping paper trading halts every order. It's safe and reversible — no real money can be affected.
         </p>
         <div class="btn-row" style="margin-top: 8px;">{"".join(destructive_buttons)}</div>
       </div>"""
@@ -459,8 +491,8 @@ def _operator_controls(snapshot: OperatorDashboardSnapshot) -> str:
     # Headline pill mirrors the runtime state; the kill-switch field lives
     # in the body grid so it sits next to its arming controls.
     return C.surface(
-        eyebrow="Operator Controls",
-        title="Stop everything, safely",
+        eyebrow=C.glossary("What you can do", key="operator_controls"),
+        title="Operator Controls",
         body_html=body,
         pill_html=(
             f'<span class="pill pill--{kill_pill_tone}">{escape(kill_label)}</span>'

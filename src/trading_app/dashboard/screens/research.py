@@ -26,8 +26,8 @@ def render(snapshot: OperatorDashboardSnapshot) -> str:
       <div class="screen__head">
         <div>
           <span class="eyebrow">Research Lab</span>
-          <h1>Backtests, candidates, and the system's own health.</h1>
-          <p>Nightly learning observes and suggests. The active model never mutates without operator approval.</p>
+          <h1>Where new strategies are tested before they go anywhere.</h1>
+          <p>The AI suggests improvements every night. You decide if any of them ever get used.</p>
         </div>
       </div>
 
@@ -104,12 +104,12 @@ def _nightly_hero(snapshot: OperatorDashboardSnapshot) -> str:
     return f"""
       <section class="hero" aria-label="Nightly Learning">
         <div class="hero__lead">
-          <span class="hero__label">Nightly Learning</span>
+          <span class="hero__label">{C.glossary("Nightly Learning", key="nightly_learning")}</span>
           <div class="hero__value mono"><span class="{delta_class}">{delta_text}</span></div>
           <div class="hero__delta">
-            <span>score delta · challenger minus champion</span>
+            <span>{C.glossary("Score delta", key="score_delta")} · how much better the candidate looks</span>
             <span class="delta-divider">·</span>
-            <span>champion {champion_score:.4f} · challenger {challenger_score:.4f}</span>
+            <span>current {champion_score:.4f} · candidate {challenger_score:.4f}</span>
             <span class="delta-divider">·</span>
             <span>{waiting_pill}</span>
           </div>
@@ -178,7 +178,7 @@ def _research_memo(snapshot: OperatorDashboardSnapshot) -> str:
       ])}
     """
     return C.surface(
-        eyebrow="Lab Notebook",
+        eyebrow=C.glossary("Lab Notebook", key="research_memo"),
         title="Research Memo · Active model unchanged",
         body_html=body,
         pill_html=pill_html,
@@ -292,7 +292,7 @@ def _system_health(snapshot: OperatorDashboardSnapshot) -> str:
               <div class="row-list" data-health-check-list>{C.empty("No health checks yet.")}</div>
             </div>
             <div>
-              <span class="eyebrow">Incident Command</span>
+              <span class="eyebrow">{C.glossary("Active incidents", key="incident_command")}</span>
               <div class="row-list" data-incident-list>{C.empty("No open incidents.")}</div>
             </div>
           </div>
@@ -334,7 +334,7 @@ def _system_health(snapshot: OperatorDashboardSnapshot) -> str:
         </div>
         <div>
           <div class="k-row">
-            <span>Incident Command</span>
+            <span>{C.glossary("Active incidents", key="incident_command")}</span>
             <strong data-numeric="1">{incident_count}</strong>
           </div>
           <div class="row-list" data-incident-list>{incident_rows}</div>

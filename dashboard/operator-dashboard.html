@@ -788,6 +788,90 @@ button {
 }
 
 /* ============================================================
+   Glossary — plain-language label with `?` popover
+   ============================================================ */
+
+.glossary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: baseline;
+}
+
+.glossary__btn {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--fg-faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: help;
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  padding: 0;
+  line-height: 1;
+  transition: color 80ms linear, border-color 80ms linear, background-color 80ms linear;
+}
+
+.glossary__btn:hover,
+.glossary__btn:focus-visible {
+  color: var(--ai);
+  border-color: rgba(94, 227, 255, 0.55);
+  background: var(--ai-soft);
+  outline: none;
+}
+
+.glossary__pop {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  text-align: left;
+  white-space: normal;
+}
+
+.glossary__pop strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ai);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.glossary:hover .glossary__pop,
+.glossary:focus-within .glossary__pop {
+  display: block;
+}
+
+/* When the popover would overflow the right edge, anchor it from the right */
+.glossary[data-pop="end"] .glossary__pop {
+  left: auto;
+  right: 0;
+}
+
+/* ============================================================
    AI / confidence
    ============================================================ */
 
@@ -983,7 +1067,10 @@ button {
         <div></div>
         <div class="rail__foot">
           <strong data-field="broker">memory-paper</strong>
-          <span data-field="kill-switch" class="pill pill--good pill--armed">Kill switch OFF</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span data-field="kill-switch" class="pill pill--good pill--armed">Kill switch OFF</span>
+            <span class="glossary"><button type="button" class="glossary__btn glossary__btn--solo" aria-label="What does Kill switch mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Kill switch</strong><span>The one button that stops all paper trading. Use it freely; it cannot harm real capital because there is no real capital here.</span></span></span>
+          </span>
         </div>
       </aside>
     <div>
@@ -1000,7 +1087,7 @@ button {
             data-title_ai="AI Review">Command Center</span>
         </div>
         <div class="topbar__strip">
-          <span class="mode mode--paper" data-field="mode">Paper Trading</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="mode mode--paper" data-field="mode">Paper Trading</span><span class="glossary"><button type="button" class="glossary__btn glossary__btn--solo" aria-label="What does Paper Trading mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Paper Trading</strong><span>Fake money only. Every dollar you see here is simulated; no real account is touched.</span></span></span></span>
           <span class="topbar__time"><span data-refresh-time> 2026-05-29T16:00:00+00:00</span></span>
         </div>
       </header>
@@ -1009,22 +1096,23 @@ button {
     <section class="screen" data-screen="home" hidden>
       <div class="screen__head">
         <div>
-          <span class="eyebrow">Paper Command Center</span>
-          <h1>Live-money actions are disabled. Strategy authority remains schedule-bound.</h1>
+          <span class="eyebrow"><span class="glossary">Paper Command Center<button type="button" class="glossary__btn" aria-label="What does Paper Trading mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Paper Trading</strong><span>Fake money only. Every dollar you see here is simulated; no real account is touched.</span></span></span></span>
+          <h1>Real-money actions are turned off. Your strategy only acts on its schedule.</h1>
+          <p class="microcopy">Live-money actions are disabled. Strategy authority remains schedule-bound.</p>
         </div>
       </div>
 
       
       <section class="hero" aria-label="Paper Portfolio">
         <div class="hero__lead">
-          <span class="hero__label">Paper Portfolio</span>
+          <span class="hero__label"><span class="glossary">Your portfolio<button type="button" class="glossary__btn" aria-label="What does Paper Portfolio mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Paper Portfolio</strong><span>Your simulated holdings — cash plus the value of any positions. Treat it as practice, not a track record.</span></span></span></span>
           <div class="hero__value" data-field="estimated-equity">$10,000.00</div>
           <div class="hero__delta">
             <span class="delta-pos">+$2,500.00</span>
             <span class="delta-divider">·</span>
             <span>+33.33% today</span>
             <span class="delta-divider">·</span>
-            <span>since open</span>
+            <span>since market open</span>
           </div>
         </div>
         <div class="hero__chart" data-hero-chart>
@@ -1053,22 +1141,22 @@ button {
       <div class="stat">
         <div class="stat__label">Cash</div>
         <div class="stat__value" ><span data-field="cash">$7,500.00</span></div>
-        <div class="stat__detail">Available in ledger</div>
+        <div class="stat__detail">Available to spend</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Day P&amp;L</div>
+        <div class="stat__label">Day P&L</div>
         <div class="stat__value" ><span data-field="realized-pnl">$0.00</span></div>
         <div class="stat__detail">Open orders: <span data-field="open-orders">0</span></div>
       </div>
       <div class="stat stat--warn">
-        <div class="stat__label">Risk State</div>
+        <div class="stat__label">Risk</div>
         <div class="stat__value" ><span data-field="risk-severity">ATTENTION</span></div>
         <div class="stat__detail">1 rejection</div>
       </div>
       <div class="stat stat--ai">
-        <div class="stat__label">Active models</div>
+        <div class="stat__label">Running strategies</div>
         <div class="stat__value" >1</div>
-        <div class="stat__detail">paper authority only</div>
+        <div class="stat__detail">fake-money only</div>
       </div></section>
 
       <div class="grid-2-1">
@@ -1077,8 +1165,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Daily Report</span>
-            <h2>Latest decisions</h2>
+            <span class="eyebrow"><span class="glossary">Today&#x27;s decisions<button type="button" class="glossary__btn" aria-label="What does Daily Report mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Daily Report</strong><span>The system&#x27;s summary of every trade decision today — accepted, rejected, and why. The audit record for one trading day.</span></span></span></span>
+            <h2>What the strategy did today</h2>
           </div>
           <span class="pill pill--ghost" >2 reviewed</span>
         </div>
@@ -1102,7 +1190,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">AI Daily Memo</span>
+            <span class="eyebrow"><span class="glossary">What the AI did<button type="button" class="glossary__btn" aria-label="What does AI Daily Memo mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>AI Daily Memo</strong><span>What the AI thought about today&#x27;s activity, written for a human to read. It is advisory; you are still the one who approves changes.</span></span></span></span>
             <h2>AI is a copilot, not an oracle</h2>
           </div>
           <span class="pill pill--ai" >REVIEWED</span>
@@ -1134,10 +1222,10 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Runtime Proof</span>
-            <h2>System status</h2>
+            <span class="eyebrow"><span class="glossary">System status<button type="button" class="glossary__btn" aria-label="What does Runtime Proof mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Runtime Proof</strong><span>Evidence that the trading loop actually ran today — prices refreshed, broker synced, orders submitted, fills applied.</span></span></span></span>
+            <h2>What ran today</h2>
           </div>
-          <span class="pill pill--ai" >Daily close only</span>
+          <span class="pill pill--ai" >Trades once a day</span>
         </div>
         <div class="surface__body">
           <div class="k-list">
@@ -1185,8 +1273,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Paper Boundary</span>
-            <h2>Live disabled</h2>
+            <span class="eyebrow"><span class="glossary">This is fake money<button type="button" class="glossary__btn" aria-label="What does Paper Boundary mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Paper Boundary</strong><span>The wall between this app and real money. We literally cannot place a live-money order from here.</span></span></span></span>
+            <h2><span class="glossary">Live disabled<button type="button" class="glossary__btn" aria-label="What does Live disabled mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Live disabled</strong><span>Real-money trading is turned off and cannot be turned on from this screen. Even arming the kill switch the wrong way only affects paper orders.</span></span></span></h2>
           </div>
           <span class="pill pill--good" >Paper only</span>
         </div>
@@ -1218,7 +1306,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Latest Prices</span>
+            <span class="eyebrow"><span class="glossary">Latest Prices<button type="button" class="glossary__btn" aria-label="What does Latest Prices mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Latest Prices</strong><span>The most recent prices the system has on file for tracked symbols. Stale prices are flagged so you know not to trust them.</span></span></span></span>
             <h2>Market data · <span data-field="price-feed">IEX</span></h2>
           </div>
           <span class="pill pill--good" >FRESH</span>
@@ -1244,7 +1332,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Data Quality Evidence</span>
+            <span class="eyebrow"><span class="glossary">How good is the data?<button type="button" class="glossary__btn" aria-label="What does Data Quality Evidence mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Data Quality Evidence</strong><span>How trustworthy today&#x27;s market data is. Warning means the data is fine for research but not for live trading decisions.</span></span></span></span>
             <h2><span data-field="data-quality-status">warning</span></h2>
           </div>
           <span class="pill pill--warn" data-field="data-quality-chip">warning</span>
@@ -1309,9 +1397,9 @@ button {
     <section class="screen" data-screen="strategies" hidden>
       <div class="screen__head">
         <div>
-          <span class="eyebrow">Models</span>
-          <h1>Inspect and compare trading models.</h1>
-          <p>Every signal answers which model fired, what evidence it used, and how the risk engine reacted.</p>
+          <span class="eyebrow">Your strategies</span>
+          <h1>What's trading on your behalf — and why.</h1>
+          <p>Every trade can be traced back to the strategy that fired it, the data it used, and whether the safety system let it through.</p>
         </div>
       </div>
 
@@ -1320,7 +1408,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Active Model</span>
+            <span class="eyebrow"><span class="glossary">Active Model<button type="button" class="glossary__btn" aria-label="What does Active Model mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Active Model</strong><span>The strategy currently allowed to place paper orders. We only run one at a time so behavior is easy to audit.</span></span></span></span>
             <h2><span data-field="active-strategy-name">Monthly Sector ETF Momentum</span></h2>
           </div>
           <span class="pill pill--ai" data-field="active-strategy-authority">paper</span>
@@ -1328,16 +1416,16 @@ button {
         <div class="surface__body">
           
       <div class="hero__lead">
-        <span class="hero__label">Hypothesis</span>
+        <span class="hero__label"><span class="glossary">Hypothesis<button type="button" class="glossary__btn" aria-label="What does Hypothesis mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Hypothesis</strong><span>The trading theory the model is built on. Every model starts as a claim about how markets behave that we then test.</span></span></span></span>
         <p class="surface__summary" data-field="active-strategy-hypothesis">U.S. sector ETFs with stronger trailing momentum may continue outperforming over the next monthly holding window.</p>
       </div>
       <div class="k-list">
         <div class="k-row">
-          <span>Model key</span>
+          <span>Strategy ID</span>
           <strong data-numeric="1"><span data-field="active-strategy-id" class="mono">monthly_sector_momentum:1.0.0</span></strong>
         </div>
         <div class="k-row">
-          <span>Cadence</span>
+          <span><span class="glossary">Cadence<button type="button" class="glossary__btn" aria-label="What does Cadence mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Cadence</strong><span>How often the model decides whether to trade. &quot;Daily close&quot; means it only acts at the end of each trading day — slow and steady.</span></span></span></span>
           <strong><span data-field="active-strategy-cadence">daily_close</span></strong>
         </div>
       </div>
@@ -1346,32 +1434,32 @@ button {
       </article>
       <section class="stat-row" aria-label="Active model metrics">
       <div class="stat stat--neg">
-        <div class="stat__label">Score</div>
+        <div class="stat__label"><span class="glossary">Score<button type="button" class="glossary__btn" aria-label="What does Score mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Score</strong><span>A single number that ranks how well a model has been doing in our evaluation system. Higher is better, but the absolute value depends on the metric.</span></span></span></div>
         <div class="stat__value" ><span class="mono">-0.0240</span></div>
-        <div class="stat__detail">Champion · arena scoring</div>
+        <div class="stat__detail">Higher is better</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Cadence</div>
+        <div class="stat__label"><span class="glossary">Cadence<button type="button" class="glossary__btn" aria-label="What does Cadence mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Cadence</strong><span>How often the model decides whether to trade. &quot;Daily close&quot; means it only acts at the end of each trading day — slow and steady.</span></span></span></div>
         <div class="stat__value" ><span class="mono">daily_close</span></div>
-        <div class="stat__detail">Holding period · Approximately one month between rebalance checks.</div>
+        <div class="stat__detail">Holds positions for Approximately one month between rebalance checks.</div>
       </div>
       <div class="stat stat--ai">
-        <div class="stat__label">Universe</div>
-        <div class="stat__value" ><span data-field="active-strategy-universe" class="mono">11 U.S. ETF(s)</span></div>
-        <div class="stat__detail">Paper authority only</div>
+        <div class="stat__label"><span class="glossary">Universe<button type="button" class="glossary__btn" aria-label="What does Universe mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Universe</strong><span>The list of symbols the model is allowed to pick from. A small, well-understood universe is usually safer than a sprawling one.</span></span></span></div>
+        <div class="stat__value" ><span data-field="active-strategy-universe" class="mono">11 U.S. ETFs</span></div>
+        <div class="stat__detail">What it can pick from</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Benchmark</div>
+        <div class="stat__label"><span class="glossary">Benchmark<button type="button" class="glossary__btn" aria-label="What does Benchmark mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Benchmark</strong><span>An index — usually SPY (the S&amp;P 500) — we measure returns against. Beating the benchmark over time is the whole game.</span></span></span></div>
         <div class="stat__value" ><span data-field="active-strategy-benchmark" class="mono">SPY</span></div>
-        <div class="stat__detail">Excess return measured vs. this index</div>
+        <div class="stat__detail">Returns compared to this index</div>
       </div></section>
       
       <article class="surface" >
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Model Arena</span>
-            <h2>Champion / Challenger</h2>
+            <span class="eyebrow"><span class="glossary">Model Arena<button type="button" class="glossary__btn" aria-label="What does Model Arena mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Model Arena</strong><span>Where current and candidate strategies are scored side by side. Promotion never happens automatically — the operator decides.</span></span></span></span>
+            <h2><span class="glossary">Champion / Challenger<button type="button" class="glossary__btn" aria-label="What does Champion / Challenger mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Champion / Challenger</strong><span>The current trading model (Champion) versus a candidate we&#x27;re testing (Challenger). We never replace one without proving the new one is meaningfully better.</span></span></span></h2>
           </div>
           <span class="pill pill--ai" >recommend · promote_to_shadow</span>
         </div>
@@ -1431,8 +1519,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Signal</span>
-            <h2>How the model enters</h2>
+            <span class="eyebrow"><span class="glossary">Signal<button type="button" class="glossary__btn" aria-label="What does Signal mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Signal</strong><span>How the model decides what to buy. Could be a momentum score, a mean-reversion trigger, anything quantifiable from market data.</span></span></span></span>
+            <h2>How it picks what to buy</h2>
           </div>
           
         </div>
@@ -1445,8 +1533,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Sizing</span>
-            <h2>How the model allocates</h2>
+            <span class="eyebrow"><span class="glossary">Sizing<button type="button" class="glossary__btn" aria-label="What does Sizing mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Sizing</strong><span>How much of your cash the model puts into each position. Equal-weight is the simplest; risk-weighted is more careful.</span></span></span></span>
+            <h2>How much it buys</h2>
           </div>
           
         </div>
@@ -1459,8 +1547,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Exit</span>
-            <h2>How the model leaves</h2>
+            <span class="eyebrow"><span class="glossary">Exit<button type="button" class="glossary__btn" aria-label="What does Exit mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Exit</strong><span>When the model sells. Could be a calendar rule (&quot;sell after 30 days&quot;), a stop loss, or a rebalance signal.</span></span></span></span>
+            <h2>When it sells</h2>
           </div>
           
         </div>
@@ -1474,8 +1562,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Known Failure Modes</span>
-            <h2>Where this model breaks</h2>
+            <span class="eyebrow"><span class="glossary">Known Failure Modes<button type="button" class="glossary__btn" aria-label="What does Known Failure Modes mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Known Failure Modes</strong><span>The specific situations where this model is expected to perform badly. Documented up front so we&#x27;re not surprised when they happen.</span></span></span></span>
+            <h2>When this strategy misses</h2>
           </div>
           <span class="pill pill--warn" >3 documented</span>
         </div>
@@ -1503,10 +1591,10 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">AI Role</span>
-            <h2>What the copilot does</h2>
+            <span class="eyebrow"><span class="glossary">AI Role<button type="button" class="glossary__btn" aria-label="What does AI Role mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>AI Role</strong><span>What the AI copilot is allowed to do for this model. It explains, summarizes, and recommends — never trades autonomously.</span></span></span></span>
+            <h2>What the copilot helps with</h2>
           </div>
-          <span class="pill pill--ai" >copilot · not oracle</span>
+          <span class="pill pill--ai" >advisory only</span>
         </div>
         <div class="surface__body">
           <div class="row-list" data-active-strategy-ai-role-list>
@@ -1555,22 +1643,22 @@ button {
       <div class="stat">
         <div class="stat__label">Cash</div>
         <div class="stat__value" >$7,500.00</div>
-        <div class="stat__detail">Available in paper ledger</div>
+        <div class="stat__detail">Money available to spend</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Open orders</div>
+        <div class="stat__label"><span class="glossary">Open orders<button type="button" class="glossary__btn" aria-label="What does Open orders mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Open orders</strong><span>Orders the broker has accepted but not yet filled. For daily-close strategies, this is usually zero until 4pm ET.</span></span></span></div>
         <div class="stat__value" >0</div>
-        <div class="stat__detail">Awaiting broker fill</div>
+        <div class="stat__detail">Sent to the broker, not yet filled</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Realized P&amp;L</div>
+        <div class="stat__label"><span class="glossary">Realized P&amp;L<button type="button" class="glossary__btn" aria-label="What does Realized P&amp;L mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Realized P&amp;L</strong><span>Profit or loss from positions you&#x27;ve already closed. Open positions don&#x27;t count until you sell.</span></span></span></div>
         <div class="stat__value" >$0.00</div>
-        <div class="stat__detail">Closed lots, paper currency</div>
+        <div class="stat__detail">From positions you've already closed</div>
       </div>
       <div class="stat">
         <div class="stat__label">Positions</div>
         <div class="stat__value" >1</div>
-        <div class="stat__detail">Symbols currently held</div>
+        <div class="stat__detail">Different symbols you currently hold</div>
       </div></section>
 
       
@@ -1638,7 +1726,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Statement Review</span>
+            <span class="eyebrow"><span class="glossary">Broker statement vs our records<button type="button" class="glossary__btn" aria-label="What does Statement Review mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Statement Review</strong><span>Once the broker sends an official statement, we re-check it against our daily reconciliation. Catches errors the daily check missed.</span></span></span></span>
             <h2><span data-field="statement-status">Reconciled</span></h2>
           </div>
           <span class="pill pill--good" data-field="statement-chip">Clean</span>
@@ -1675,8 +1763,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Audit Trail</span>
-            <h2>Provenance</h2>
+            <span class="eyebrow"><span class="glossary">Where the numbers came from<button type="button" class="glossary__btn" aria-label="What does Audit Trail mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Audit Trail</strong><span>Every trade traced back to the raw data and rule that produced it. If anyone asks &quot;why did we buy this?&quot;, the answer is one click away.</span></span></span></span>
+            <h2>Audit Trail</h2>
           </div>
           <span class="pill pill--ai" >7 sources</span>
         </div>
@@ -1713,7 +1801,7 @@ button {
         <div class="surface__head">
           <div class="surface__title">
             <span class="eyebrow">Accounting</span>
-            <h2>Tax Estimate</h2>
+            <h2><span class="glossary">Tax Estimate<button type="button" class="glossary__btn" aria-label="What does Tax Estimate mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Tax Estimate</strong><span>A rough estimate of what taxes might look like on closed positions. Research-only — not filing-grade accounting.</span></span></span></h2>
           </div>
           <span class="pill pill--ghost" data-field="tax-estimate-state">estimate only</span>
         </div>
@@ -1723,15 +1811,15 @@ button {
       <div class="k-split">
         <div class="k-list">
         <div class="k-row">
-          <span>Active lots</span>
+          <span><span class="glossary">Open lots<button type="button" class="glossary__btn" aria-label="What does Tax lots mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Tax lots</strong><span>Each batch of shares you bought is a &quot;lot&quot; with its own cost basis. When you sell, the lot you pick determines the gain or loss.</span></span></span></span>
           <strong><span data-field="tax-active-lots" class="mono">1</span></strong>
         </div>
         <div class="k-row">
-          <span>Realized lots</span>
+          <span>Closed lots</span>
           <strong><span data-field="tax-realized-lots" class="mono">0</span></strong>
         </div>
         <div class="k-row">
-          <span>Lot method</span>
+          <span><span class="glossary">Lot method<button type="button" class="glossary__btn" aria-label="What does FIFO mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>FIFO</strong><span>First-In, First-Out — the oldest lot is sold first. The simplest method and the default for most brokers.</span></span></span></span>
           <strong><span data-field="tax-lot-method" class="mono">FIFO</span></strong>
         </div>
         <div class="k-row">
@@ -1740,7 +1828,7 @@ button {
         </div></div>
         <div class="k-list">
         <div class="k-row">
-          <span>Short-term gains</span>
+          <span><span class="glossary">Short-term gains<button type="button" class="glossary__btn" aria-label="What does Short-term vs long-term gains mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Short-term vs long-term gains</strong><span>Gains on positions held under 1 year are taxed at higher rates than those held 1 year or longer. This estimate is research-only.</span></span></span></span>
           <strong><span data-field="tax-short-term-gains">$0.00</span></strong>
         </div>
         <div class="k-row">
@@ -1762,15 +1850,15 @@ button {
       <div class="screen__head">
         <div>
           <span class="eyebrow">Risk</span>
-          <h1>Risk is first-class. Severity, exposure, rejections, and the kill switch sit together.</h1>
-          <p>Nothing here is hidden behind advanced settings. The operator can see the state of every guardrail without scrolling.</p>
+          <h1>Your safety net, in one place.</h1>
+          <p>How risky things are right now, what trades were blocked, where your money is, and the one button that stops it all.</p>
         </div>
       </div>
 
       
       <section class="hero" aria-label="Risk severity">
         <div class="hero__lead">
-          <span class="hero__label">Risk State</span>
+          <span class="hero__label"><span class="glossary">Risk State<button type="button" class="glossary__btn" aria-label="What does Risk State mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Risk State</strong><span>How worried the safety system is right now. OK means everything&#x27;s within limits; ATTENTION means at least one rule fired today.</span></span></span></span>
           <div class="hero__value" style="color: var(--warn);">
             <span data-field="risk-severity">ATTENTION</span>
           </div>
@@ -1783,36 +1871,36 @@ button {
           </div>
         </div>
         <p class="microcopy">
-          Kill switch is the ONE button that stops all paper trading. Use it freely; it cannot harm real capital.
+          The <span class="glossary">kill switch<button type="button" class="glossary__btn" aria-label="What does Kill switch mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Kill switch</strong><span>The one button that stops all paper trading. Use it freely; it cannot harm real capital because there is no real capital here.</span></span></span> is the one button that stops all paper trading. Press it whenever you want — it cannot affect real money.
         </p>
       </section>
       <section class="stat-row" aria-label="Risk metrics">
       <div class="stat stat--warn">
-        <div class="stat__label">Severity</div>
+        <div class="stat__label">How worried we are</div>
         <div class="stat__value" >ATTENTION</div>
-        <div class="stat__detail">2 risk decisions today</div>
+        <div class="stat__detail">2 trades checked today</div>
       </div>
       <div class="stat stat--warn">
-        <div class="stat__label">Rejected signals</div>
+        <div class="stat__label"><span class="glossary">Trades blocked<button type="button" class="glossary__btn" aria-label="What does Rejected signals mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Rejected signals</strong><span>Trades the strategy wanted to place, but the safety system stopped. Each rejection has a reason — read it before changing settings.</span></span></span></div>
         <div class="stat__value" >1</div>
         <div class="stat__detail">Paper orders refused today</div>
       </div>
       <div class="stat stat--warn">
-        <div class="stat__label">Active alerts</div>
+        <div class="stat__label">Active warnings</div>
         <div class="stat__value" >1</div>
         <div class="stat__detail">Operator review needed</div>
       </div>
       <div class="stat">
-        <div class="stat__label">Drawdown</div>
+        <div class="stat__label"><span class="glossary">Drawdown<button type="button" class="glossary__btn" aria-label="What does Drawdown mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Drawdown</strong><span>The biggest drop from a peak portfolio value. A 10% drawdown means you fell 10% from your highest point — a normal measure of pain.</span></span></span></div>
         <div class="stat__value" >—</div>
-        <div class="stat__detail">no historical series yet</div>
+        <div class="stat__detail">No history yet</div>
       </div></section>
       
       <article class="surface" >
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Per-Symbol</span>
+            <span class="eyebrow"><span class="glossary">Where your money is<button type="button" class="glossary__btn" aria-label="What does Exposure mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Exposure</strong><span>How much of your money is committed to a single symbol or sector. Concentrated exposure is riskier — if that one thing tanks, you do too.</span></span></span></span>
             <h2>Exposure by symbol</h2>
           </div>
           <span class="pill pill--warn" >top 100%</span>
@@ -1838,7 +1926,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Risk Engine</span>
+            <span class="eyebrow"><span class="glossary">Trades the safety system blocked<button type="button" class="glossary__btn" aria-label="What does Rejected signals mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Rejected signals</strong><span>Trades the strategy wanted to place, but the safety system stopped. Each rejection has a reason — read it before changing settings.</span></span></span></span>
             <h2>Rejected Signals</h2>
           </div>
           <span class="pill pill--warn" >1 blocked</span>
@@ -1846,7 +1934,7 @@ button {
         <div class="surface__body">
           <div class="row-list" >
       <div class="row row--warn">
-        <div class="row__primary"><strong class="mono">MAX_ORDERS_PER_DAY</strong><small>max orders per day would be exceeded</small></div>
+        <div class="row__primary"><strong class="mono"><span class="glossary">MAX_ORDERS_PER_DAY<button type="button" class="glossary__btn" aria-label="What does MAX_ORDERS_PER_DAY mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>MAX_ORDERS_PER_DAY</strong><span>A safety rule that caps how many orders the strategy can place in a single trading day. Prevents a runaway model from spamming the broker.</span></span></span></strong><small>We didn&#x27;t place this trade — you&#x27;ve already hit today&#x27;s order limit. This is a safety rule that prevents a runaway strategy from spamming the broker.</small></div>
         <div class="row__meta"><span class="mono">daily-order-2</span> · SPY</div>
         
       </div></div>
@@ -1858,7 +1946,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Runtime Alerts</span>
+            <span class="eyebrow"><span class="glossary">System warnings<button type="button" class="glossary__btn" aria-label="What does Runtime Alerts mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Runtime Alerts</strong><span>Real-time warnings about things the system thinks you should know — data feed problems, rule violations, anything off-normal.</span></span></span></span>
             <h2><span data-field="alert-count">1 active</span></h2>
           </div>
           <span class="pill pill--warn" data-field="alert-tone">WARN</span>
@@ -1884,8 +1972,8 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Operator Controls</span>
-            <h2>Stop everything, safely</h2>
+            <span class="eyebrow"><span class="glossary">What you can do<button type="button" class="glossary__btn" aria-label="What does Operator Controls mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Operator Controls</strong><span>Buttons that let you pause trading, arm the kill switch, force a broker reconciliation, or save today&#x27;s report.</span></span></span></span>
+            <h2>Operator Controls</h2>
           </div>
           <span class="pill pill--ai">Kill OFF</span>
         </div>
@@ -1903,11 +1991,11 @@ button {
       </div>
       
       <div data-control-grid>
-        <div class="btn-row"><button class="btn" data-control-action="resume_runtime" disabled>Resume runtime</button><button class="btn" data-control-action="pause_runtime">Pause runtime</button><button class="btn" data-control-action="force_reconciliation">Force reconcile</button><button class="btn" data-control-action="generate_report">Generate report</button></div>
+        <div class="btn-row"><button class="btn" data-control-action="resume_runtime" disabled>Resume trading</button><button class="btn" data-control-action="pause_runtime">Pause trading</button><button class="btn" data-control-action="force_reconciliation">Re-check vs broker</button><button class="btn" data-control-action="generate_report">Save today&#x27;s summary</button></div>
         <p class="microcopy" style="margin-top: 12px;">
-          Arming the kill switch halts all paper order submission. Reversible at any time.
+          Stopping paper trading halts every order. It's safe and reversible — no real money can be affected.
         </p>
-        <div class="btn-row" style="margin-top: 8px;"><button class="btn btn--danger" data-control-action="enable_paper_kill_switch">Arm Kill Switch</button><button class="btn" data-control-action="disable_paper_kill_switch" disabled>Disarm Kill Switch</button></div>
+        <div class="btn-row" style="margin-top: 8px;"><button class="btn btn--danger" data-control-action="enable_paper_kill_switch">Stop all paper trading</button><button class="btn" data-control-action="disable_paper_kill_switch" disabled>Re-enable trading</button></div>
       </div>
       <div class="k-list">
         <div class="k-row">
@@ -1930,20 +2018,20 @@ button {
       <div class="screen__head">
         <div>
           <span class="eyebrow">Research Lab</span>
-          <h1>Backtests, candidates, and the system's own health.</h1>
-          <p>Nightly learning observes and suggests. The active model never mutates without operator approval.</p>
+          <h1>Where new strategies are tested before they go anywhere.</h1>
+          <p>The AI suggests improvements every night. You decide if any of them ever get used.</p>
         </div>
       </div>
 
       
       <section class="hero" aria-label="Nightly Learning">
         <div class="hero__lead">
-          <span class="hero__label">Nightly Learning</span>
+          <span class="hero__label"><span class="glossary">Nightly Learning<button type="button" class="glossary__btn" aria-label="What does Nightly Learning mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Nightly Learning</strong><span>After each trading day we re-evaluate candidate models against the active one. If a candidate is meaningfully better, we&#x27;ll recommend it — but never replace anything without your approval.</span></span></span></span>
           <div class="hero__value mono"><span class="ai-c">+0.0000</span></div>
           <div class="hero__delta">
-            <span>score delta · challenger minus champion</span>
+            <span><span class="glossary">Score delta<button type="button" class="glossary__btn" aria-label="What does Score delta mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Score delta</strong><span>How much better (or worse) the challenger scored than the current champion. Positive means the challenger looks better — but &quot;better&quot; needs more than one number.</span></span></span> · how much better the candidate looks</span>
             <span class="delta-divider">·</span>
-            <span>champion 0.0505 · challenger 0.0505</span>
+            <span>current 0.0505 · candidate 0.0505</span>
             <span class="delta-divider">·</span>
             <span><span class="pill pill--ai" >Observed, not promoted</span></span>
           </div>
@@ -1973,7 +2061,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Lab Notebook</span>
+            <span class="eyebrow"><span class="glossary">Lab Notebook<button type="button" class="glossary__btn" aria-label="What does Research memo mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Research memo</strong><span>The AI&#x27;s nightly written summary of what it studied, what it found, and what it recommends. Written to be read by a human, not parsed by a machine.</span></span></span></span>
             <h2>Research Memo · Active model unchanged</h2>
           </div>
           <span class="pill pill--good" >No active mutation</span>
@@ -2061,7 +2149,7 @@ button {
         </div>
         <div>
           <div class="k-row">
-            <span>Incident Command</span>
+            <span><span class="glossary">Active incidents<button type="button" class="glossary__btn" aria-label="What does Incident Command mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Incident Command</strong><span>Active operational problems the system has noticed. Each comes with a suggested action and a severity level.</span></span></span></span>
             <strong data-numeric="1">1</strong>
           </div>
           <div class="row-list" data-incident-list>
@@ -2083,13 +2171,13 @@ button {
       
       <div class="screen__head" aria-label="AI Governance posture">
         <div>
-          <span class="eyebrow">AI Governance</span>
+          <span class="eyebrow"><span class="glossary">AI oversight<button type="button" class="glossary__btn" aria-label="What does AI Governance mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>AI Governance</strong><span>The ledger of what the AI did, what it recommended, and what still needs your approval. AI never makes irreversible changes on its own.</span></span></span></span>
           <h1>Copilot active · operator-approved</h1>
           <p>
             <span class="conf-dots" aria-label="confidence"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span>
             <span class="ai-c mono">&nbsp;0.73</span>
             &nbsp;·&nbsp;
-            The copilot explains, summarizes, and recommends. Nothing here is autonomous.
+            The AI explains, summarizes, and recommends. It never trades or changes anything on its own.
           </p>
         </div>
       </div>
@@ -2119,7 +2207,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Functional Readiness</span>
+            <span class="eyebrow"><span class="glossary">Health check evidence<button type="button" class="glossary__btn" aria-label="What does Functional Readiness mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Functional Readiness</strong><span>Evidence that every feature in the app has been tested with real data. A checklist of &quot;yes, this works&quot;.</span></span></span></span>
             <h2><span data-field="completion-status">Awaiting Audit</span></h2>
           </div>
           <span class="pill pill--warn" data-field="completion-chip">Review</span>
@@ -2157,7 +2245,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Final Acceptance</span>
+            <span class="eyebrow"><span class="glossary">Ready for real money?<button type="button" class="glossary__btn" aria-label="What does Final Acceptance mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Final Acceptance</strong><span>The final operator signoff before this app could ever be used for real-money trading. Multiple safety checks must all pass first.</span></span></span></span>
             <h2><span data-field="final-acceptance-status">Awaiting Signoff</span></h2>
           </div>
           <span class="pill pill--warn" data-field="final-acceptance-chip">Not final</span>
@@ -2194,7 +2282,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Reports And Learning</span>
+            <span class="eyebrow"><span class="glossary">Daily report status<button type="button" class="glossary__btn" aria-label="What does Reports And Learning mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Reports And Learning</strong><span>Where today&#x27;s report was saved and whether nightly learning produced any new recommendations.</span></span></span></span>
             <h2><span data-field="report-status">Snapshot</span></h2>
           </div>
           <span class="pill pill--ai" >Model locked</span>
@@ -2233,7 +2321,7 @@ button {
         
         <div class="surface__head">
           <div class="surface__title">
-            <span class="eyebrow">Live Readiness</span>
+            <span class="eyebrow"><span class="glossary">Ready for live trading?<button type="button" class="glossary__btn" aria-label="What does Live Readiness mean?" tabindex="0">?</button><span class="glossary__pop" role="tooltip"><strong>Live Readiness</strong><span>A separate evaluation of whether the app is technically ready to trade real money. Right now this is always &quot;disabled&quot;.</span></span></span></span>
             <h2><span data-field="live-readiness-panel-status">ready_for_review</span></h2>
           </div>
           <span class="pill pill--warn" >Live disabled</span>
