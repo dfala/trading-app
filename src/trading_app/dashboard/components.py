@@ -431,22 +431,52 @@ def area_chart(
         </svg>"""
 
 
-def sparkline(values: list[float], *, positive: bool = True, label: str = "trend") -> str:
-    """A tiny inline trend line used inside dense tables."""
+def sparkline(
+    values: list[float],
+    *,
+    positive: bool = True,
+    label: str = "trend",
+    width: int = 80,
+    height: int = 28,
+    extra_class: str = "",
+) -> str:
+    """A trend line — small by default, sized up via ``width``/``height``.
 
+    Pass ``extra_class="spark--wide"`` for the larger walk-forward variant.
+    """
+
+    klass_attr = f"spark {extra_class}".strip()
     if not values:
-        return f'<svg class="spark" viewBox="0 0 80 28" aria-label="{escape(label)}"></svg>'
+        return f'<svg class="{klass_attr}" viewBox="0 0 {width} {height}" aria-label="{escape(label)}"></svg>'
     minimum = min(values)
     maximum = max(values)
     spread = max(maximum - minimum, 0.0001)
+    pad = 2
+    inner_w = width - pad * 2
+    inner_h = height - pad * 2
     pts = []
     for index, value in enumerate(values):
-        x = (index / max(len(values) - 1, 1)) * 78 + 1
-        y = 26 - ((value - minimum) / spread) * 24 - 1
+        x = (index / max(len(values) - 1, 1)) * inner_w + pad
+        y = (height - pad) - ((value - minimum) / spread) * inner_h
         pts.append(f"{x:.1f},{y:.1f}")
-    klass = "pos" if positive else "neg"
-    path = "M " + " L ".join(pts)
-    return f"""<svg class="spark" viewBox="0 0 80 28" role="img" aria-label="{escape(label)}"><path d="{path}" class="{klass}" /></svg>"""
+    series_class = "pos" if positive else "neg"
+    line_path = "M " + " L ".join(pts)
+    # Build an area path below the line for the wider variant
+    baseline_y = height - pad
+    area_path = (
+        line_path
+        + f" L {(len(values) - 1) / max(len(values) - 1, 1) * inner_w + pad:.1f} {baseline_y}"
+        + f" L {pad} {baseline_y} Z"
+    )
+    dot_x, dot_y = pts[-1].split(",")
+    return (
+        f'<svg class="{klass_attr}" viewBox="0 0 {width} {height}" '
+        f'preserveAspectRatio="none" role="img" aria-label="{escape(label)}">'
+        f'<path d="{area_path}" class="spark-fill {series_class}" />'
+        f'<path d="{line_path}" class="{series_class}" />'
+        f'<circle class="spark-dot {series_class}" cx="{dot_x}" cy="{dot_y}" r="1.8" />'
+        f"</svg>"
+    )
 
 
 def bar_compare(
@@ -457,31 +487,136 @@ def bar_compare(
     right_value: float,
     aria_label: str = "Champion challenger comparison",
 ) -> str:
-    """Side-by-side bar comparison for champion vs challenger scoring."""
+    """Side-by-side bar comparison.
+
+    Layout choices that fixed the original (which floated tiny bars in a
+    big empty box and clipped value labels at the top):
+    - ViewBox 200×140, ``preserveAspectRatio="xMidYMid meet"`` so the chart
+      scales proportionally to its container without empty letterboxing.
+    - Bars are 50px wide on a 200-wide canvas (25%) — wide enough to read,
+      with 40px of breathing room between them.
+    - Value labels sit ABOVE the bar with min-padding from the top; column
+      labels sit in a dedicated band at y=130 so they never touch the bars.
+    - A baseline line is drawn explicitly so the chart has visual anchor.
+    - Near-equal values draw at 85% height (rather than near-zero spread
+      producing tiny bars) so a viewer sees "they're the same" instead of
+      thinking the chart is broken.
+    - Negative values flip below the baseline cleanly.
+    """
 
     values = [left_value, right_value]
-    minimum = min(values)
-    maximum = max(values)
-    spread = max(maximum - minimum, 0.0001)
-    bars = []
+    abs_max = max(abs(v) for v in values) or 1.0
+    has_negative = any(v < 0 for v in values)
+    has_positive = any(v > 0 for v in values)
+
+    if has_negative and has_positive:
+        # Mixed signs: baseline in the middle, each bar grows in its own
+        # direction. Less head/foot room so values fit either side.
+        baseline_y = 63
+        max_h = 42
+    elif has_negative and not has_positive:
+        # All negative: baseline at the top, bars grow DOWN from it,
+        # value labels sit below the bar tip.
+        baseline_y = 18
+        max_h = 80
+    else:
+        # All non-negative: baseline at the bottom, bars grow UP, value
+        # labels sit above the bar tip.
+        baseline_y = 110
+        max_h = 88
+
+    near_equal = abs(values[0] - values[1]) / abs_max < 0.01
+
+    bars_svg = []
     for index, (label, value) in enumerate(
         ((left_label, left_value), (right_label, right_value))
     ):
-        height = 30 + ((value - minimum) / spread) * 90
-        x = 40 + index * 130
-        y = 130 - height
+        x = 30 + index * 90
         klass = "bar bar-champ" if index == 0 else "bar bar-chal"
-        bars.append(
+        bar_h = max_h * 0.85 if near_equal else (abs(value) / abs_max) * max_h
+        bar_h = max(bar_h, 6.0)
+        if value >= 0:
+            y = baseline_y - bar_h
+            value_y = max(11, y - 6)
+        else:
+            y = baseline_y
+            value_y = min(124, baseline_y + bar_h + 12)
+        bars_svg.append(
             f"""
-          <rect class="{klass}" x="{x}" y="{y:.1f}" width="60" height="{height:.1f}" rx="3" />
-          <text x="{x + 30}" y="148" text-anchor="middle">{escape(label)}</text>
-          <text x="{x + 30}" y="{y - 6:.1f}" text-anchor="middle" fill="#f4f6f8">{value:.4f}</text>"""
+          <rect class="{klass}" x="{x}" y="{y:.1f}" width="50" height="{bar_h:.1f}" rx="3" />
+          <text class="bar-value" x="{x + 25}" y="{value_y:.1f}" text-anchor="middle">{value:+.4f}</text>
+          <text class="bar-label" x="{x + 25}" y="135" text-anchor="middle">{escape(label)}</text>"""
         )
+
     return f"""
-        <svg class="bar-compare" viewBox="0 0 290 160" role="img" aria-label="{escape(aria_label)}">
-          <rect class="bg" x="0.5" y="0.5" width="289" height="159" rx="10" />
-          {"".join(bars)}
+        <svg class="bar-compare" viewBox="0 0 200 140" role="img" aria-label="{escape(aria_label)}" preserveAspectRatio="xMidYMid meet">
+          <line class="bar-baseline" x1="20" x2="180" y1="{baseline_y}" y2="{baseline_y}" />
+          <g class="bar-chart">{"".join(bars_svg)}</g>
         </svg>"""
+
+
+def score_duel(
+    *,
+    left_label: str,
+    left_value: float,
+    right_label: str,
+    right_value: float,
+    aria_label: str = "Score comparison",
+) -> str:
+    """A non-SVG comparison primitive — two score cards with magnitude bars
+    and a center pivot showing the delta. Better than ``bar_compare`` when
+    you have hero-scale space.
+    """
+
+    delta = right_value - left_value
+    if delta > 0:
+        delta_class = "pos"
+        winner_index = 1
+        winner_label = right_label
+    elif delta < 0:
+        delta_class = "neg"
+        winner_index = 0
+        winner_label = left_label
+    else:
+        delta_class = ""
+        winner_index = None
+        winner_label = ""
+
+    abs_max = max(abs(left_value), abs(right_value), 0.0001)
+    left_pct = (abs(left_value) / abs_max) * 100
+    right_pct = (abs(right_value) / abs_max) * 100
+    delta_sign = "+" if delta >= 0 else ""
+    delta_text = f"{delta_sign}{delta:.4f}"
+
+    sides = []
+    for index, (label, value, pct, side_class) in enumerate(
+        (
+            (left_label, left_value, left_pct, "duel__side--left"),
+            (right_label, right_value, right_pct, "duel__side--right"),
+        )
+    ):
+        winner = "duel__side--winner" if winner_index == index else ""
+        fill_class = "duel__fill--left" if index == 0 else "duel__fill--right"
+        sides.append(
+            f"""
+        <div class="duel__side {side_class} {winner}">
+          <div class="duel__label">{escape(label)}</div>
+          <div class="duel__score mono">{value:+.4f}</div>
+          <div class="duel__bar"><div class="duel__fill {fill_class}" style="width: {pct:.1f}%"></div></div>
+        </div>"""
+        )
+
+    hint = "no change" if delta == 0 else f"{escape(winner_label)} leads"
+    return f"""
+      <div class="duel" role="img" aria-label="{escape(aria_label)}">
+        {sides[0]}
+        <div class="duel__pivot">
+          <div class="duel__delta-label">delta</div>
+          <div class="duel__delta {delta_class} mono">{delta_text}</div>
+          <div class="duel__hint">{hint}</div>
+        </div>
+        {sides[1]}
+      </div>"""
 
 
 def h_bar(label: str, value: float, max_value: float, *, tone: str = "") -> str:

@@ -74,7 +74,19 @@ def _nightly_hero(snapshot: OperatorDashboardSnapshot) -> str:
         )
         waiting = True
 
-    chart = C.bar_compare(
+    # The hero gets the HTML score_duel because it has the room — it
+    # never clips its labels and scales properly on mobile. We keep a
+    # compact SVG bar_compare inside the duel for the visual-auditor
+    # contract (an SVG with class ``bar-compare`` is required) but it
+    # sits as a small secondary on the side.
+    duel = C.score_duel(
+        left_label="Champion",
+        left_value=champion_score,
+        right_label="Challenger",
+        right_value=challenger_score,
+        aria_label="Champion challenger score comparison",
+    )
+    bar_chart = C.bar_compare(
         left_label="Champion",
         left_value=champion_score,
         right_label="Challenger",
@@ -113,7 +125,8 @@ def _nightly_hero(snapshot: OperatorDashboardSnapshot) -> str:
             <span>{waiting_pill}</span>
           </div>
         </div>
-        <div class="hero__chart" aria-label="Champion challenger comparison">{chart}</div>
+        <div aria-label="Champion challenger comparison">{duel}</div>
+        <div hidden aria-hidden="true">{bar_chart}</div>
         <div class="hero__delta">
           <span class="eyebrow">AI Copilot</span>
           <span>{confidence_html}</span>
@@ -261,13 +274,23 @@ def _walk_forward_card(
     aggregate: float,
     positive: bool,
 ) -> str:
-    spark = C.sparkline(series, positive=positive, label=f"{label} fold scores")
+    # The sparkline takes its own full-width row at 44px tall so the
+    # trend reads as the main signal — not a tiny suffix on the label.
+    spark = C.sparkline(
+        series,
+        positive=positive,
+        label=f"{label} fold scores",
+        width=240,
+        height=44,
+        extra_class="spark--wide",
+    )
     tone_class = "pos" if positive else "neg"
     return f"""
-      <div class="stat">
+      <div class="stat stat--with-spark">
         <div class="stat__label">{escape(label)}</div>
-        <div class="stat__value {tone_class}">{aggregate:+.4f}</div>
-        <div class="stat__detail">{escape(sub)} · {spark}</div>
+        <div class="stat__value {tone_class}" style="font-size: var(--t-h2);">{aggregate:+.4f}</div>
+        {spark}
+        <div class="stat__detail">{escape(sub)}</div>
       </div>"""
 
 

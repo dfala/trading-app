@@ -874,17 +874,161 @@ a.row:focus-visible,
 
 .spark { width: 80px; height: 28px; display: inline-block; vertical-align: middle; }
 .spark path { fill: none; stroke-width: 1.4; }
+.spark path.pos, .spark path.neg, .spark path.ai { fill: none; }
 .spark .pos { stroke: var(--pos); }
 .spark .neg { stroke: var(--neg); }
 .spark .ai  { stroke: var(--ai);  }
 
+/* The area fill below the trend line — subtle gradient feel via opacity */
+.spark .spark-fill { stroke: none; }
+.spark .spark-fill.pos { fill: var(--pos); opacity: 0.16; }
+.spark .spark-fill.neg { fill: var(--neg); opacity: 0.14; }
+.spark .spark-fill.ai  { fill: var(--ai);  opacity: 0.14; }
+
+.spark .spark-dot { stroke: none; }
+.spark .spark-dot.pos { fill: var(--pos); }
+.spark .spark-dot.neg { fill: var(--neg); }
+.spark .spark-dot.ai  { fill: var(--ai);  }
+
+/* Wide variant — used in stat cards where the trend is the main signal */
+.spark--wide {
+  width: 100%;
+  height: 44px;
+  display: block;
+}
+.spark--wide path { stroke-width: 1.5; }
+
 /* Bar comparison (champion / challenger) */
-.bar-compare { width: 100%; height: 160px; display: block; }
-.bar-compare .bg { fill: var(--canvas); stroke: var(--line); }
-.bar-compare rect.bar { rx: 3; }
-.bar-compare .bar-champ { fill: var(--ai); opacity: 0.85; }
-.bar-compare .bar-chal { fill: var(--pos); opacity: 0.85; }
-.bar-compare text { fill: var(--fg-muted); font-family: var(--font-mono); font-size: 10.5px; }
+.bar-compare {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  display: block;
+}
+.bar-compare .bar-champ { fill: var(--ai); opacity: 0.9; }
+.bar-compare .bar-chal  { fill: var(--pos); opacity: 0.9; }
+.bar-compare .bar-baseline {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.bar-compare .bar-value {
+  fill: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+.bar-compare .bar-label {
+  fill: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* score_duel — HTML-based score comparison primitive */
+.duel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+  padding: 22px clamp(16px, 3vw, 36px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--raised);
+}
+
+.duel__side {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.duel__side--right { text-align: right; }
+
+.duel__label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.duel__score {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  line-height: 1;
+}
+
+.duel__side--left .duel__score  { color: var(--fg); }
+.duel__side--right .duel__score { color: var(--fg); }
+.duel__side--winner.duel__side--left .duel__score  { color: var(--ai); }
+.duel__side--winner.duel__side--right .duel__score { color: var(--pos); }
+
+.duel__bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.duel__side--right .duel__bar { justify-content: flex-end; }
+
+.duel__fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.duel__fill--left  { background: var(--ai);  opacity: 0.55; }
+.duel__fill--right { background: var(--pos); opacity: 0.55; }
+
+.duel__side--winner .duel__fill { opacity: 1; }
+
+.duel__pivot {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  padding: 8px 14px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.duel__delta-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-faint);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.duel__delta {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1;
+}
+
+.duel__delta.pos { color: var(--pos); }
+.duel__delta.neg { color: var(--neg); }
+
+.duel__hint {
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+@media (max-width: 620px) {
+  .duel { grid-template-columns: 1fr; gap: 14px; padding: 18px; }
+  .duel__side--right { text-align: left; }
+  .duel__side--right .duel__bar { justify-content: flex-start; }
+  .duel__pivot {
+    border-left: 0; border-right: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
+  }
+}
 
 /* Real risk bars (per symbol/sector) */
 .h-bar {

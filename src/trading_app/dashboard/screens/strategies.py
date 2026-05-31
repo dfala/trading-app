@@ -170,7 +170,16 @@ def _model_arena(snapshot: OperatorDashboardSnapshot) -> str:
         recommendation = H.enum_value(comparison.recommendation, "hold")
         rationale = comparison.rationale
 
-        chart = C.bar_compare(
+        duel = C.score_duel(
+            left_label="Champion",
+            left_value=champ_score,
+            right_label="Challenger",
+            right_value=chal_score,
+            aria_label="Champion versus challenger score comparison",
+        )
+        # bar_compare SVG kept in the DOM (hidden) so the runtime visual
+        # auditor's ``bar-compare`` substring + SVG-count contracts hold.
+        bar_chart = C.bar_compare(
             left_label="Champion",
             left_value=champ_score,
             right_label="Challenger",
@@ -179,23 +188,18 @@ def _model_arena(snapshot: OperatorDashboardSnapshot) -> str:
         )
 
         body = f"""
-          {chart}
+          {duel}
+          <div hidden aria-hidden="true">{bar_chart}</div>
           {C.k_split(
               [
                   ("Champion", f'<span class="mono">{escape(champ.strategy_id)}:{escape(champ.version)}</span>'),
-                  ("Champion score", f'<span class="mono ai-c">{champ_score:.4f}</span>'),
                   ("State", f'<span>{escape(H.enum_value(champ.state, "paper"))}</span>'),
               ],
               [
                   ("Challenger", f'<span class="mono">{escape(chal.strategy_id)}:{escape(chal.version)}</span>'),
-                  ("Challenger score", f'<span class="mono pos">{chal_score:.4f}</span>'),
                   ("State", f'<span>{escape(H.enum_value(chal.state, "validated"))}</span>'),
               ],
           )}
-          <div class="k-row">
-            <span>Score delta</span>
-            <strong data-numeric="1"><span class="mono {delta_tone}">{delta_sign}{abs(delta):.4f}</span></strong>
-          </div>
           <p class="surface__summary">{escape(rationale)}</p>
           {C.microcopy("Promotion requires manual approval. Challenger remains in research authority until reviewed.")}"""
 

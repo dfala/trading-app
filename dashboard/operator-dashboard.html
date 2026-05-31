@@ -849,17 +849,161 @@ a.row:focus-visible,
 
 .spark { width: 80px; height: 28px; display: inline-block; vertical-align: middle; }
 .spark path { fill: none; stroke-width: 1.4; }
+.spark path.pos, .spark path.neg, .spark path.ai { fill: none; }
 .spark .pos { stroke: var(--pos); }
 .spark .neg { stroke: var(--neg); }
 .spark .ai  { stroke: var(--ai);  }
 
+/* The area fill below the trend line — subtle gradient feel via opacity */
+.spark .spark-fill { stroke: none; }
+.spark .spark-fill.pos { fill: var(--pos); opacity: 0.16; }
+.spark .spark-fill.neg { fill: var(--neg); opacity: 0.14; }
+.spark .spark-fill.ai  { fill: var(--ai);  opacity: 0.14; }
+
+.spark .spark-dot { stroke: none; }
+.spark .spark-dot.pos { fill: var(--pos); }
+.spark .spark-dot.neg { fill: var(--neg); }
+.spark .spark-dot.ai  { fill: var(--ai);  }
+
+/* Wide variant — used in stat cards where the trend is the main signal */
+.spark--wide {
+  width: 100%;
+  height: 44px;
+  display: block;
+}
+.spark--wide path { stroke-width: 1.5; }
+
 /* Bar comparison (champion / challenger) */
-.bar-compare { width: 100%; height: 160px; display: block; }
-.bar-compare .bg { fill: var(--canvas); stroke: var(--line); }
-.bar-compare rect.bar { rx: 3; }
-.bar-compare .bar-champ { fill: var(--ai); opacity: 0.85; }
-.bar-compare .bar-chal { fill: var(--pos); opacity: 0.85; }
-.bar-compare text { fill: var(--fg-muted); font-family: var(--font-mono); font-size: 10.5px; }
+.bar-compare {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  display: block;
+}
+.bar-compare .bar-champ { fill: var(--ai); opacity: 0.9; }
+.bar-compare .bar-chal  { fill: var(--pos); opacity: 0.9; }
+.bar-compare .bar-baseline {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.bar-compare .bar-value {
+  fill: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+.bar-compare .bar-label {
+  fill: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* score_duel — HTML-based score comparison primitive */
+.duel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+  padding: 22px clamp(16px, 3vw, 36px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--raised);
+}
+
+.duel__side {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.duel__side--right { text-align: right; }
+
+.duel__label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.duel__score {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--fg);
+  line-height: 1;
+}
+
+.duel__side--left .duel__score  { color: var(--fg); }
+.duel__side--right .duel__score { color: var(--fg); }
+.duel__side--winner.duel__side--left .duel__score  { color: var(--ai); }
+.duel__side--winner.duel__side--right .duel__score { color: var(--pos); }
+
+.duel__bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.duel__side--right .duel__bar { justify-content: flex-end; }
+
+.duel__fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.duel__fill--left  { background: var(--ai);  opacity: 0.55; }
+.duel__fill--right { background: var(--pos); opacity: 0.55; }
+
+.duel__side--winner .duel__fill { opacity: 1; }
+
+.duel__pivot {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  padding: 8px 14px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+
+.duel__delta-label {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-faint);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.duel__delta {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1;
+}
+
+.duel__delta.pos { color: var(--pos); }
+.duel__delta.neg { color: var(--neg); }
+
+.duel__hint {
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+@media (max-width: 620px) {
+  .duel { grid-template-columns: 1fr; gap: 14px; padding: 18px; }
+  .duel__side--right { text-align: left; }
+  .duel__side--right .duel__bar { justify-content: flex-start; }
+  .duel__pivot {
+    border-left: 0; border-right: 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 0;
+  }
+}
 
 /* Real risk bars (per symbol/sector) */
 .h-bar {
@@ -2270,26 +2414,42 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         <div class="surface__body">
           
           
-        <svg class="bar-compare" viewBox="0 0 290 160" role="img" aria-label="Champion versus challenger score comparison">
-          <rect class="bg" x="0.5" y="0.5" width="289" height="159" rx="10" />
-          
-          <rect class="bar bar-champ" x="40" y="100.0" width="60" height="30.0" rx="3" />
-          <text x="70" y="148" text-anchor="middle">Champion</text>
-          <text x="70" y="94.0" text-anchor="middle" fill="#f4f6f8">-0.0240</text>
-          <rect class="bar bar-chal" x="170" y="10.0" width="60" height="120.0" rx="3" />
-          <text x="200" y="148" text-anchor="middle">Challenger</text>
-          <text x="200" y="4.0" text-anchor="middle" fill="#f4f6f8">-0.0131</text>
-        </svg>
+      <div class="duel" role="img" aria-label="Champion versus challenger score comparison">
+        
+        <div class="duel__side duel__side--left ">
+          <div class="duel__label">Champion</div>
+          <div class="duel__score mono">-0.0240</div>
+          <div class="duel__bar"><div class="duel__fill duel__fill--left" style="width: 100.0%"></div></div>
+        </div>
+        <div class="duel__pivot">
+          <div class="duel__delta-label">delta</div>
+          <div class="duel__delta pos mono">+0.0108</div>
+          <div class="duel__hint">Challenger leads</div>
+        </div>
+        
+        <div class="duel__side duel__side--right duel__side--winner">
+          <div class="duel__label">Challenger</div>
+          <div class="duel__score mono">-0.0131</div>
+          <div class="duel__bar"><div class="duel__fill duel__fill--right" style="width: 54.9%"></div></div>
+        </div>
+      </div>
+          <div hidden aria-hidden="true">
+        <svg class="bar-compare" viewBox="0 0 200 140" role="img" aria-label="Champion versus challenger score comparison" preserveAspectRatio="xMidYMid meet">
+          <line class="bar-baseline" x1="20" x2="180" y1="18" y2="18" />
+          <g class="bar-chart">
+          <rect class="bar bar-champ" x="30" y="18.0" width="50" height="80.0" rx="3" />
+          <text class="bar-value" x="55" y="110.0" text-anchor="middle">-0.0240</text>
+          <text class="bar-label" x="55" y="135" text-anchor="middle">Champion</text>
+          <rect class="bar bar-chal" x="120" y="18.0" width="50" height="43.9" rx="3" />
+          <text class="bar-value" x="145" y="73.9" text-anchor="middle">-0.0131</text>
+          <text class="bar-label" x="145" y="135" text-anchor="middle">Challenger</text></g>
+        </svg></div>
           
       <div class="k-split">
         <div class="k-list">
         <div class="k-row">
           <span>Champion</span>
           <strong><span class="mono">monthly_sector_momentum:1.0.0</span></strong>
-        </div>
-        <div class="k-row">
-          <span>Champion score</span>
-          <strong><span class="mono ai-c">-0.0240</span></strong>
         </div>
         <div class="k-row">
           <span>State</span>
@@ -2301,18 +2461,10 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
           <strong><span class="mono">monthly_sector_momentum:1.1.0</span></strong>
         </div>
         <div class="k-row">
-          <span>Challenger score</span>
-          <strong><span class="mono pos">-0.0131</span></strong>
-        </div>
-        <div class="k-row">
           <span>State</span>
           <strong><span>validated</span></strong>
         </div></div>
       </div>
-          <div class="k-row">
-            <span>Score delta</span>
-            <strong data-numeric="1"><span class="mono pos">+0.0108</span></strong>
-          </div>
           <p class="surface__summary">Challenger has stronger after-cost evidence and can be reviewed for shadow mode.</p>
           <p class="microcopy" >Promotion requires manual approval. Challenger remains in research authority until reviewed.</p>
         </div>
@@ -2479,7 +2631,7 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
           <div class="row-list" data-position-list>
       <div class="row">
         <div class="row__primary"><strong>SPY</strong><small>avg <span class="mono">$500.00</span></small></div>
-        <div class="row__meta"><span class="mono">5 sh</span> <span class="mono"><svg class="spark" viewBox="0 0 80 28" role="img" aria-label="SPY trend"><path d="M 1.0,25.0 L 20.5,25.0 L 40.0,25.0 L 59.5,25.0 L 79.0,25.0" class="pos" /></svg></span></div>
+        <div class="row__meta"><span class="mono">5 sh</span> <span class="mono"><svg class="spark" viewBox="0 0 80 28" preserveAspectRatio="none" role="img" aria-label="SPY trend"><path d="M 2.0,26.0 L 21.0,26.0 L 40.0,26.0 L 59.0,26.0 L 78.0,26.0 L 78.0 26 L 2 26 Z" class="spark-fill pos" /><path d="M 2.0,26.0 L 21.0,26.0 L 40.0,26.0 L 59.0,26.0 L 78.0,26.0" class="pos" /><circle class="spark-dot pos" cx="78.0" cy="26.0" r="1.8" /></svg></span></div>
         <div class="row__value ">$2,500.00</div>
       </div></div>
         </div>
@@ -2840,16 +2992,36 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
             <span><span class="pill pill--ai" >Observed, not promoted</span></span>
           </div>
         </div>
-        <div class="hero__chart" aria-label="Champion challenger comparison">
-        <svg class="bar-compare" viewBox="0 0 290 160" role="img" aria-label="Champion challenger score comparison">
-          <rect class="bg" x="0.5" y="0.5" width="289" height="159" rx="10" />
-          
-          <rect class="bar bar-champ" x="40" y="100.0" width="60" height="30.0" rx="3" />
-          <text x="70" y="148" text-anchor="middle">Champion</text>
-          <text x="70" y="94.0" text-anchor="middle" fill="#f4f6f8">0.0505</text>
-          <rect class="bar bar-chal" x="170" y="100.0" width="60" height="30.0" rx="3" />
-          <text x="200" y="148" text-anchor="middle">Challenger</text>
-          <text x="200" y="94.0" text-anchor="middle" fill="#f4f6f8">0.0505</text>
+        <div aria-label="Champion challenger comparison">
+      <div class="duel" role="img" aria-label="Champion challenger score comparison">
+        
+        <div class="duel__side duel__side--left ">
+          <div class="duel__label">Champion</div>
+          <div class="duel__score mono">+0.0505</div>
+          <div class="duel__bar"><div class="duel__fill duel__fill--left" style="width: 100.0%"></div></div>
+        </div>
+        <div class="duel__pivot">
+          <div class="duel__delta-label">delta</div>
+          <div class="duel__delta  mono">+0.0000</div>
+          <div class="duel__hint">no change</div>
+        </div>
+        
+        <div class="duel__side duel__side--right ">
+          <div class="duel__label">Challenger</div>
+          <div class="duel__score mono">+0.0505</div>
+          <div class="duel__bar"><div class="duel__fill duel__fill--right" style="width: 100.0%"></div></div>
+        </div>
+      </div></div>
+        <div hidden aria-hidden="true">
+        <svg class="bar-compare" viewBox="0 0 200 140" role="img" aria-label="Champion challenger score comparison" preserveAspectRatio="xMidYMid meet">
+          <line class="bar-baseline" x1="20" x2="180" y1="110" y2="110" />
+          <g class="bar-chart">
+          <rect class="bar bar-champ" x="30" y="35.2" width="50" height="74.8" rx="3" />
+          <text class="bar-value" x="55" y="29.2" text-anchor="middle">+0.0505</text>
+          <text class="bar-label" x="55" y="135" text-anchor="middle">Champion</text>
+          <rect class="bar bar-chal" x="120" y="35.2" width="50" height="74.8" rx="3" />
+          <text class="bar-value" x="145" y="29.2" text-anchor="middle">+0.0505</text>
+          <text class="bar-label" x="145" y="135" text-anchor="middle">Challenger</text></g>
         </svg></div>
         <div class="hero__delta">
           <span class="eyebrow">AI Copilot</span>
@@ -2896,16 +3068,18 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
       
       <section class="stat-row" aria-label="Walk-forward score trends">
         
-      <div class="stat">
+      <div class="stat stat--with-spark">
         <div class="stat__label">Champion walk-forward</div>
-        <div class="stat__value pos">+0.0505</div>
-        <div class="stat__detail">monthly_sector_momentum:1.0.0 · <svg class="spark" viewBox="0 0 80 28" role="img" aria-label="Champion walk-forward fold scores"><path d="M 1.0,1.0 L 79.0,25.0" class="pos" /></svg></div>
+        <div class="stat__value pos" style="font-size: var(--t-h2);">+0.0505</div>
+        <svg class="spark spark--wide" viewBox="0 0 240 44" preserveAspectRatio="none" role="img" aria-label="Champion walk-forward fold scores"><path d="M 2.0,2.0 L 238.0,42.0 L 238.0 42 L 2 42 Z" class="spark-fill pos" /><path d="M 2.0,2.0 L 238.0,42.0" class="pos" /><circle class="spark-dot pos" cx="238.0" cy="42.0" r="1.8" /></svg>
+        <div class="stat__detail">monthly_sector_momentum:1.0.0</div>
       </div>
         
-      <div class="stat">
+      <div class="stat stat--with-spark">
         <div class="stat__label">Challenger walk-forward</div>
-        <div class="stat__value pos">+0.0505</div>
-        <div class="stat__detail">monthly_sector_momentum:1.1.0-shadow-candidate · <svg class="spark" viewBox="0 0 80 28" role="img" aria-label="Challenger walk-forward fold scores"><path d="M 1.0,1.0 L 79.0,25.0" class="pos" /></svg></div>
+        <div class="stat__value pos" style="font-size: var(--t-h2);">+0.0505</div>
+        <svg class="spark spark--wide" viewBox="0 0 240 44" preserveAspectRatio="none" role="img" aria-label="Challenger walk-forward fold scores"><path d="M 2.0,2.0 L 238.0,42.0 L 238.0 42 L 2 42 Z" class="spark-fill pos" /><path d="M 2.0,2.0 L 238.0,42.0" class="pos" /><circle class="spark-dot pos" cx="238.0" cy="42.0" r="1.8" /></svg>
+        <div class="stat__detail">monthly_sector_momentum:1.1.0-shadow-candidate</div>
       </div>
         
       <div class="stat stat--ai">
