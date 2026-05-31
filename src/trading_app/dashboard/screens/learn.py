@@ -136,20 +136,23 @@ def _topic_pill(default_link: str) -> str:
 
 
 def _term_row(term: str, definition: str, deep_link: str) -> str:
-    """One row: mono term on the left, plain definition, deep-link tail."""
+    """One clickable row: the entire surface acts as the deep-link.
+
+    Rendered as an anchor styled like ``.row`` so a beginner can click
+    anywhere on the entry to jump to the screen where the concept lives.
+    A right-aligned chevron + screen label still signals the destination.
+    """
 
     label = _SCREEN_LABELS.get(deep_link, "Dashboard")
-    primary = (
-        f'<span class="mono" style="font-size: 13px; color: var(--fg);">'
-        f"{escape(term)}</span>"
-    )
-    meta = (
-        f'<a href="{escape(deep_link)}" '
-        f'style="color: var(--ai); text-decoration: none; font-size: 12px;">'
-        f"See on {escape(label)} →</a>"
-    )
-    return C.row(
-        primary=primary,
-        primary_sub=escape(definition),
-        meta=meta,
+    aria = f"Open {label}: {term}"
+    return (
+        f'<a class="row row--link" data-screen-link="{escape(deep_link.lstrip("#"))}" '
+        f'href="{escape(deep_link)}" aria-label="{escape(aria)}">'
+        f'<div class="row__primary">'
+        f'<strong class="mono" style="font-size: 13px;">{escape(term)}</strong>'
+        f"<small>{escape(definition)}</small>"
+        f"</div>"
+        f'<div class="row__value" style="color: var(--ai); font-size: 12px;">'
+        f"See on {escape(label)} →</div>"
+        f"</a>"
     )

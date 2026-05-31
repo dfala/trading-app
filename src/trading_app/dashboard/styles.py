@@ -702,6 +702,33 @@ button {
 .row--warn { border-left: 2px solid var(--warn); }
 .row--danger { border-left: 2px solid var(--neg); }
 
+/* Anchor-styled rows — entire row is clickable (Learn surface deep-links) */
+a.row,
+.row--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 80ms linear, box-shadow 80ms linear;
+}
+
+a.row:hover,
+.row--link:hover {
+  background: rgba(94, 227, 255, 0.05);
+  box-shadow: inset 2px 0 0 var(--ai);
+}
+
+a.row:hover .row__value,
+.row--link:hover .row__value {
+  color: var(--ai);
+}
+
+a.row:focus-visible,
+.row--link:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: -2px;
+  background: rgba(94, 227, 255, 0.05);
+}
+
 .k-list {
   display: grid;
   gap: 10px;
