@@ -617,6 +617,69 @@ def whats_this_panel() -> str:
     </aside>"""
 
 
+def command_palette() -> str:
+    """⌘K command palette — global search across screens, terms, symbols, actions."""
+
+    return """
+    <div class="cmd" data-cmd hidden role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="cmd__backdrop" data-cmd-close></div>
+      <div class="cmd__panel" role="combobox" aria-expanded="true" aria-haspopup="listbox">
+        <div class="cmd__head">
+          <span class="cmd__icon" aria-hidden="true">⌘K</span>
+          <input class="cmd__input" data-cmd-input type="text"
+                 placeholder="Jump to a screen, term, or symbol…"
+                 autocomplete="off" spellcheck="false" />
+          <kbd class="cmd__esc" data-cmd-close>Esc</kbd>
+        </div>
+        <div class="cmd__results" data-cmd-results role="listbox" aria-label="Results"></div>
+        <div class="cmd__hint">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>Esc</kbd> close</span>
+        </div>
+      </div>
+    </div>"""
+
+
+def shortcuts_help() -> str:
+    """Shortcut help modal — surfaces every keyboard binding (Phase D)."""
+
+    rows = [
+        ("⌘K / Ctrl K / /", "Open command palette"),
+        ("g h", "Go Home"),
+        ("g m", "Go to Models"),
+        ("g p", "Go to Paper Trading"),
+        ("g r", "Go to Risk"),
+        ("g l", "Go to Research Lab"),
+        ("g a", "Go to AI Review"),
+        ("g ?", "Go to Learn"),
+        ("t", "Toggle Plain / Technical"),
+        ("?", "Show this help"),
+        ("Esc", "Close any open panel"),
+    ]
+    body = "".join(
+        f'<div class="shortcut-row"><kbd>{escape(keys)}</kbd>'
+        f'<span>{escape(label)}</span></div>'
+        for keys, label in rows
+    )
+    return f"""
+    <div class="shortcuts" data-shortcuts hidden role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="shortcuts__backdrop" data-shortcuts-close></div>
+      <div class="shortcuts__panel">
+        <header class="shortcuts__head">
+          <h3>Keyboard shortcuts</h3>
+          <button type="button" class="shortcuts__close" data-shortcuts-close aria-label="Close">×</button>
+        </header>
+        <div class="shortcuts__body">
+          {body}
+        </div>
+        <footer class="shortcuts__foot">
+          <p class="microcopy">Press <kbd>?</kbd> any time to reopen this list.</p>
+        </footer>
+      </div>
+    </div>"""
+
+
 def tour() -> str:
     """First-time tour overlay (Phase B2).
 

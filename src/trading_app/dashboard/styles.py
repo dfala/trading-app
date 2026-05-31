@@ -81,9 +81,10 @@ _CSS = """
   --s-8: 40px;
   --s-9: 56px;
 
-  /* Type scale */
-  --t-hero: clamp(48px, 6.4vw, 72px);
-  --t-display: clamp(28px, 3.2vw, 40px);
+  /* Type scale — restrained on purpose. Hierarchy comes from weight,
+     letter-spacing, and color, not raw pixel size. */
+  --t-hero: clamp(38px, 4.2vw, 52px);
+  --t-display: clamp(22px, 2.2vw, 30px);
   --t-h2: clamp(18px, 1.6vw, 22px);
   --t-body: 14px;
   --t-small: 13px;
@@ -411,12 +412,28 @@ button {
 }
 
 .hero__value {
+  position: relative;
   font-family: var(--font-mono);
   font-size: var(--t-hero);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.015em;
   color: var(--fg);
+  padding-left: 14px;
+}
+
+/* A thin cyan accent left of the hero value — the calmer substitute
+   for raw size as the attention anchor. */
+.hero__value::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  background: var(--ai);
+  opacity: 0.85;
+  border-radius: 999px;
 }
 
 .hero__delta {
@@ -454,6 +471,75 @@ button {
   height: 100%;
   display: block;
 }
+
+/* Crosshair overlay — captures mouse, positions cross + tooltip */
+.hero-chart__overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.hero-chart__cross {
+  position: absolute;
+  top: 0;
+  bottom: 28px;
+  width: 1px;
+  background: rgba(94, 227, 255, 0.5);
+  pointer-events: none;
+  display: none;
+  transform: translateX(-0.5px);
+}
+
+.hero-chart__dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ai);
+  box-shadow: 0 0 0 3px rgba(94, 227, 255, 0.18);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
+}
+
+.hero-chart__dot.neg { background: var(--neg); box-shadow: 0 0 0 3px rgba(255, 77, 94, 0.18); }
+
+.hero-chart__tip {
+  position: absolute;
+  top: 12px;
+  display: none;
+  padding: 6px 10px;
+  border: 1px solid rgba(94, 227, 255, 0.35);
+  border-radius: var(--r-sm);
+  background: var(--overlay);
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.hero-chart__tip--left {
+  transform: translateX(calc(-100% - 8px));
+}
+
+.hero-chart__tip-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 2px;
+}
+
+.hero-chart__tip-value {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.hero-chart__tip.neg .hero-chart__tip-value { color: var(--neg); }
 
 .hero__periods {
   display: inline-flex;
@@ -510,8 +596,9 @@ button {
 .stat__value {
   font-family: var(--font-mono);
   font-size: var(--t-display);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
+  letter-spacing: -0.01em;
   color: var(--fg);
 }
 
@@ -838,6 +925,261 @@ a.row:focus-visible,
   font-size: 12.5px;
   color: var(--fg);
 }
+
+/* ============================================================
+   Command palette (⌘K) — global navigation + search
+   ============================================================ */
+
+.cmd {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.cmd[hidden] { display: none; }
+
+.cmd__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.66);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cmd__panel {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: 70vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.cmd__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cmd__icon {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ai);
+  padding: 3px 6px;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: 4px;
+}
+
+.cmd__input {
+  flex: 1;
+  font: inherit;
+  font-size: 15px;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  letter-spacing: 0.005em;
+}
+
+.cmd__input::placeholder { color: var(--fg-faint); }
+
+.cmd__esc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--raised);
+  cursor: pointer;
+}
+
+.cmd__results {
+  overflow-y: auto;
+  padding: 6px 0;
+  min-height: 60px;
+  max-height: 50vh;
+}
+
+.cmd__section {
+  padding: 8px 16px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.cmd__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--fg);
+  border-left: 2px solid transparent;
+}
+
+.cmd__row[aria-selected="true"] {
+  background: rgba(94, 227, 255, 0.07);
+  border-left-color: var(--ai);
+}
+
+.cmd__row-label {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cmd__row-title {
+  font-size: 13.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd__row-title em {
+  font-style: normal;
+  color: var(--ai);
+  background: rgba(94, 227, 255, 0.1);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.cmd__row-sub {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd__row-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.cmd__hint {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+.cmd__hint kbd, .shortcuts kbd, kbd.cmd__esc {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--raised);
+  color: var(--fg-muted);
+  margin-right: 4px;
+}
+
+.cmd__empty {
+  padding: 24px 16px;
+  color: var(--fg-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ============================================================
+   Shortcuts help modal
+   ============================================================ */
+
+.shortcuts {
+  position: fixed;
+  inset: 0;
+  z-index: 109;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcuts[hidden] { display: none; }
+
+.shortcuts__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.66);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.shortcuts__panel {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  padding: 20px 22px 16px;
+}
+
+.shortcuts__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.shortcuts__head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.shortcuts__close {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--fg-faint);
+  font-size: 14px;
+}
+
+.shortcuts__close:hover { color: var(--fg); }
+
+.shortcuts__body {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.shortcut-row span {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.shortcuts__foot { border-top: 1px solid var(--line); padding-top: 12px; }
 
 /* ============================================================
    Tour overlay (Phase B2)

@@ -56,9 +56,10 @@
   --s-8: 40px;
   --s-9: 56px;
 
-  /* Type scale */
-  --t-hero: clamp(48px, 6.4vw, 72px);
-  --t-display: clamp(28px, 3.2vw, 40px);
+  /* Type scale — restrained on purpose. Hierarchy comes from weight,
+     letter-spacing, and color, not raw pixel size. */
+  --t-hero: clamp(38px, 4.2vw, 52px);
+  --t-display: clamp(22px, 2.2vw, 30px);
   --t-h2: clamp(18px, 1.6vw, 22px);
   --t-body: 14px;
   --t-small: 13px;
@@ -386,12 +387,28 @@ button {
 }
 
 .hero__value {
+  position: relative;
   font-family: var(--font-mono);
   font-size: var(--t-hero);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.015em;
   color: var(--fg);
+  padding-left: 14px;
+}
+
+/* A thin cyan accent left of the hero value — the calmer substitute
+   for raw size as the attention anchor. */
+.hero__value::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8%;
+  bottom: 8%;
+  width: 2px;
+  background: var(--ai);
+  opacity: 0.85;
+  border-radius: 999px;
 }
 
 .hero__delta {
@@ -429,6 +446,75 @@ button {
   height: 100%;
   display: block;
 }
+
+/* Crosshair overlay — captures mouse, positions cross + tooltip */
+.hero-chart__overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+.hero-chart__cross {
+  position: absolute;
+  top: 0;
+  bottom: 28px;
+  width: 1px;
+  background: rgba(94, 227, 255, 0.5);
+  pointer-events: none;
+  display: none;
+  transform: translateX(-0.5px);
+}
+
+.hero-chart__dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ai);
+  box-shadow: 0 0 0 3px rgba(94, 227, 255, 0.18);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
+}
+
+.hero-chart__dot.neg { background: var(--neg); box-shadow: 0 0 0 3px rgba(255, 77, 94, 0.18); }
+
+.hero-chart__tip {
+  position: absolute;
+  top: 12px;
+  display: none;
+  padding: 6px 10px;
+  border: 1px solid rgba(94, 227, 255, 0.35);
+  border-radius: var(--r-sm);
+  background: var(--overlay);
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.hero-chart__tip--left {
+  transform: translateX(calc(-100% - 8px));
+}
+
+.hero-chart__tip-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 2px;
+}
+
+.hero-chart__tip-value {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.hero-chart__tip.neg .hero-chart__tip-value { color: var(--neg); }
 
 .hero__periods {
   display: inline-flex;
@@ -485,8 +571,9 @@ button {
 .stat__value {
   font-family: var(--font-mono);
   font-size: var(--t-display);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
+  letter-spacing: -0.01em;
   color: var(--fg);
 }
 
@@ -813,6 +900,261 @@ a.row:focus-visible,
   font-size: 12.5px;
   color: var(--fg);
 }
+
+/* ============================================================
+   Command palette (⌘K) — global navigation + search
+   ============================================================ */
+
+.cmd {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.cmd[hidden] { display: none; }
+
+.cmd__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.66);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cmd__panel {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: 70vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.cmd__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cmd__icon {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ai);
+  padding: 3px 6px;
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: 4px;
+}
+
+.cmd__input {
+  flex: 1;
+  font: inherit;
+  font-size: 15px;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  letter-spacing: 0.005em;
+}
+
+.cmd__input::placeholder { color: var(--fg-faint); }
+
+.cmd__esc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--raised);
+  cursor: pointer;
+}
+
+.cmd__results {
+  overflow-y: auto;
+  padding: 6px 0;
+  min-height: 60px;
+  max-height: 50vh;
+}
+
+.cmd__section {
+  padding: 8px 16px 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.cmd__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--fg);
+  border-left: 2px solid transparent;
+}
+
+.cmd__row[aria-selected="true"] {
+  background: rgba(94, 227, 255, 0.07);
+  border-left-color: var(--ai);
+}
+
+.cmd__row-label {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cmd__row-title {
+  font-size: 13.5px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd__row-title em {
+  font-style: normal;
+  color: var(--ai);
+  background: rgba(94, 227, 255, 0.1);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.cmd__row-sub {
+  font-size: 11.5px;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmd__row-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.cmd__hint {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--fg-faint);
+}
+
+.cmd__hint kbd, .shortcuts kbd, kbd.cmd__esc {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--raised);
+  color: var(--fg-muted);
+  margin-right: 4px;
+}
+
+.cmd__empty {
+  padding: 24px 16px;
+  color: var(--fg-faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ============================================================
+   Shortcuts help modal
+   ============================================================ */
+
+.shortcuts {
+  position: fixed;
+  inset: 0;
+  z-index: 109;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcuts[hidden] { display: none; }
+
+.shortcuts__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 9, 12, 0.66);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.shortcuts__panel {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(94, 227, 255, 0.32);
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  padding: 20px 22px 16px;
+}
+
+.shortcuts__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.shortcuts__head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.shortcuts__close {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--fg-faint);
+  font-size: 14px;
+}
+
+.shortcuts__close:hover { color: var(--fg); }
+
+.shortcuts__body {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.shortcut-row span {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.shortcuts__foot { border-top: 1px solid var(--line); padding-top: 12px; }
 
 /* ============================================================
    Tour overlay (Phase B2)
@@ -2959,6 +3301,42 @@ html:not([data-vocab="technical"]) .hide-in-plain { display: none !important; }
         </footer>
       </div>
     </aside>
+  
+    <div class="cmd" data-cmd hidden role="dialog" aria-modal="true" aria-label="Command palette">
+      <div class="cmd__backdrop" data-cmd-close></div>
+      <div class="cmd__panel" role="combobox" aria-expanded="true" aria-haspopup="listbox">
+        <div class="cmd__head">
+          <span class="cmd__icon" aria-hidden="true">⌘K</span>
+          <input class="cmd__input" data-cmd-input type="text"
+                 placeholder="Jump to a screen, term, or symbol…"
+                 autocomplete="off" spellcheck="false" />
+          <kbd class="cmd__esc" data-cmd-close>Esc</kbd>
+        </div>
+        <div class="cmd__results" data-cmd-results role="listbox" aria-label="Results"></div>
+        <div class="cmd__hint">
+          <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+          <span><kbd>↵</kbd> open</span>
+          <span><kbd>Esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+  
+    <div class="shortcuts" data-shortcuts hidden role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="shortcuts__backdrop" data-shortcuts-close></div>
+      <div class="shortcuts__panel">
+        <header class="shortcuts__head">
+          <h3>Keyboard shortcuts</h3>
+          <button type="button" class="shortcuts__close" data-shortcuts-close aria-label="Close">×</button>
+        </header>
+        <div class="shortcuts__body">
+          <div class="shortcut-row"><kbd>⌘K / Ctrl K / /</kbd><span>Open command palette</span></div><div class="shortcut-row"><kbd>g h</kbd><span>Go Home</span></div><div class="shortcut-row"><kbd>g m</kbd><span>Go to Models</span></div><div class="shortcut-row"><kbd>g p</kbd><span>Go to Paper Trading</span></div><div class="shortcut-row"><kbd>g r</kbd><span>Go to Risk</span></div><div class="shortcut-row"><kbd>g l</kbd><span>Go to Research Lab</span></div><div class="shortcut-row"><kbd>g a</kbd><span>Go to AI Review</span></div><div class="shortcut-row"><kbd>g ?</kbd><span>Go to Learn</span></div><div class="shortcut-row"><kbd>t</kbd><span>Toggle Plain / Technical</span></div><div class="shortcut-row"><kbd>?</kbd><span>Show this help</span></div><div class="shortcut-row"><kbd>Esc</kbd><span>Close any open panel</span></div>
+        </div>
+        <footer class="shortcuts__foot">
+          <p class="microcopy">Press <kbd>?</kbd> any time to reopen this list.</p>
+        </footer>
+      </div>
+    </div>
+  <script id="cmd-index-data" type="application/json">{"screens":[{"id":"home","label":"Home","sub":"Command Center"},{"id":"strategies","label":"Models","sub":"Active strategy + arena"},{"id":"paper","label":"Paper Trading","sub":"Positions \u00b7 fills \u00b7 taxes"},{"id":"risk","label":"Risk","sub":"Severity \u00b7 exposures \u00b7 kill switch"},{"id":"research","label":"Research Lab","sub":"Nightly learning \u00b7 health"},{"id":"ai","label":"AI Review","sub":"Governance \u00b7 readiness"},{"id":"learn","label":"Learn","sub":"Plain-language reference"}],"terms":[{"key":"paper_trading","term":"Paper Trading","definition":"Fake money only. Every dollar you see here is simulated; no real account is touched.","topic_link":"#home"},{"key":"paper_boundary","term":"Paper Boundary","definition":"The wall between this app and real money. We literally cannot place a live-money order from here.","topic_link":"#home"},{"key":"live_disabled","term":"Live disabled","definition":"Real-money trading is turned off and cannot be turned on from this screen. Even arming the kill switch the wrong way only affects paper orders.","topic_link":"#home"},{"key":"paper_portfolio","term":"Paper Portfolio","definition":"Your simulated holdings \u2014 cash plus the value of any positions. Treat it as practice, not a track record.","topic_link":"#home"},{"key":"realized_pnl","term":"Realized P&L","definition":"Profit or loss from positions you've already closed. Open positions don't count until you sell.","topic_link":"#home"},{"key":"open_orders","term":"Open orders","definition":"Orders the broker has accepted but not yet filled. For daily-close strategies, this is usually zero until 4pm ET.","topic_link":"#home"},{"key":"risk_state","term":"Risk State","definition":"How worried the safety system is right now. OK means everything's within limits; ATTENTION means at least one rule fired today.","topic_link":"#home"},{"key":"drawdown","term":"Drawdown","definition":"The biggest drop from a peak portfolio value. A 10% drawdown means you fell 10% from your highest point \u2014 a normal measure of pain.","topic_link":"#home"},{"key":"exposure","term":"Exposure","definition":"How much of your money is committed to a single symbol or sector. Concentrated exposure is riskier \u2014 if that one thing tanks, you do too.","topic_link":"#home"},{"key":"rejected_signals","term":"Rejected signals","definition":"Trades the strategy wanted to place, but the safety system stopped. Each rejection has a reason \u2014 read it before changing settings.","topic_link":"#home"},{"key":"runtime_alerts","term":"Runtime Alerts","definition":"Real-time warnings about things the system thinks you should know \u2014 data feed problems, rule violations, anything off-normal.","topic_link":"#home"},{"key":"kill_switch","term":"Kill switch","definition":"The one button that stops all paper trading. Use it freely; it cannot harm real capital because there is no real capital here.","topic_link":"#home"},{"key":"rule_max_orders_per_day","term":"MAX_ORDERS_PER_DAY","definition":"A safety rule that caps how many orders the strategy can place in a single trading day. Prevents a runaway model from spamming the broker.","topic_link":"#home"},{"key":"active_model","term":"Active Model","definition":"The strategy currently allowed to place paper orders. We only run one at a time so behavior is easy to audit.","topic_link":"#home"},{"key":"hypothesis","term":"Hypothesis","definition":"The trading theory the model is built on. Every model starts as a claim about how markets behave that we then test.","topic_link":"#home"},{"key":"cadence","term":"Cadence","definition":"How often the model decides whether to trade. \"Daily close\" means it only acts at the end of each trading day \u2014 slow and steady.","topic_link":"#home"},{"key":"universe","term":"Universe","definition":"The list of symbols the model is allowed to pick from. A small, well-understood universe is usually safer than a sprawling one.","topic_link":"#home"},{"key":"benchmark","term":"Benchmark","definition":"An index \u2014 usually SPY (the S&P 500) \u2014 we measure returns against. Beating the benchmark over time is the whole game.","topic_link":"#home"},{"key":"holding_period","term":"Holding period","definition":"How long the model typically keeps a position before selling. Shorter periods mean more trades, more costs, more taxes.","topic_link":"#home"},{"key":"signal_logic","term":"Signal","definition":"How the model decides what to buy. Could be a momentum score, a mean-reversion trigger, anything quantifiable from market data.","topic_link":"#home"},{"key":"sizing_logic","term":"Sizing","definition":"How much of your cash the model puts into each position. Equal-weight is the simplest; risk-weighted is more careful.","topic_link":"#home"},{"key":"exit_logic","term":"Exit","definition":"When the model sells. Could be a calendar rule (\"sell after 30 days\"), a stop loss, or a rebalance signal.","topic_link":"#home"},{"key":"champion_challenger","term":"Champion / Challenger","definition":"The current trading model (Champion) versus a candidate we're testing (Challenger). We never replace one without proving the new one is meaningfully better.","topic_link":"#home"},{"key":"shadow_candidate","term":"Shadow candidate","definition":"A model we're watching live but not letting trade. It produces would-be signals we can grade without risking anything.","topic_link":"#home"},{"key":"failure_modes","term":"Known Failure Modes","definition":"The specific situations where this model is expected to perform badly. Documented up front so we're not surprised when they happen.","topic_link":"#home"},{"key":"ai_role","term":"AI Role","definition":"What the AI copilot is allowed to do for this model. It explains, summarizes, and recommends \u2014 never trades autonomously.","topic_link":"#home"},{"key":"score","term":"Score","definition":"A single number that ranks how well a model has been doing in our evaluation system. Higher is better, but the absolute value depends on the metric.","topic_link":"#home"},{"key":"ai_governance","term":"AI Governance","definition":"The ledger of what the AI did, what it recommended, and what still needs your approval. AI never makes irreversible changes on its own.","topic_link":"#home"},{"key":"ai_confidence","term":"AI confidence","definition":"How sure the AI is about a recommendation, from 0 (no idea) to 1 (very sure). Always treat as advisory \u2014 a high number is not a guarantee.","topic_link":"#home"},{"key":"active_mutation","term":"Active mutation","definition":"Whether the currently trading model is in the middle of changing. We block mutations by default so behavior stays predictable.","topic_link":"#home"},{"key":"reconciliation","term":"Reconciliation","definition":"We compare our internal records to the broker's every day. \"Clean\" means they match to the penny; \"mismatch\" means something's off and needs investigating.","topic_link":"#paper"},{"key":"statement_review","term":"Statement Review","definition":"Once the broker sends an official statement, we re-check it against our daily reconciliation. Catches errors the daily check missed.","topic_link":"#ai"},{"key":"audit_trail","term":"Audit Trail","definition":"Every trade traced back to the raw data and rule that produced it. If anyone asks \"why did we buy this?\", the answer is one click away.","topic_link":"#ai"},{"key":"functional_readiness","term":"Functional Readiness","definition":"Evidence that every feature in the app has been tested with real data. A checklist of \"yes, this works\".","topic_link":"#ai"},{"key":"final_acceptance","term":"Final Acceptance","definition":"The final operator signoff before this app could ever be used for real-money trading. Multiple safety checks must all pass first.","topic_link":"#ai"},{"key":"live_readiness","term":"Live Readiness","definition":"A separate evaluation of whether the app is technically ready to trade real money. Right now this is always \"disabled\".","topic_link":"#ai"},{"key":"runtime_proof","term":"Runtime Proof","definition":"Evidence that the trading loop actually ran today \u2014 prices refreshed, broker synced, orders submitted, fills applied.","topic_link":"#home"},{"key":"incident_command","term":"Incident Command","definition":"Active operational problems the system has noticed. Each comes with a suggested action and a severity level.","topic_link":"#ai"},{"key":"data_quality","term":"Data Quality Evidence","definition":"How trustworthy today's market data is. Warning means the data is fine for research but not for live trading decisions.","topic_link":"#home"},{"key":"iex_dev_grade","term":"IEX development-grade feed","definition":"Free market data from the IEX exchange. Good for testing but missing ticks from other exchanges \u2014 don't bet real money on it.","topic_link":"#home"},{"key":"tax_lots","term":"Tax lots","definition":"Each batch of shares you bought is a \"lot\" with its own cost basis. When you sell, the lot you pick determines the gain or loss.","topic_link":"#paper"},{"key":"fifo","term":"FIFO","definition":"First-In, First-Out \u2014 the oldest lot is sold first. The simplest method and the default for most brokers.","topic_link":"#paper"},{"key":"realized_gains","term":"Realized gains","definition":"Profit (or loss) on shares you've actually sold. Open positions don't realize anything \u2014 only closing trades do.","topic_link":"#paper"},{"key":"short_long_term","term":"Short-term vs long-term gains","definition":"Gains on positions held under 1 year are taxed at higher rates than those held 1 year or longer. This estimate is research-only.","topic_link":"#paper"},{"key":"daily_report","term":"Daily Report","definition":"The system's summary of every trade decision today \u2014 accepted, rejected, and why. The audit record for one trading day.","topic_link":"#home"},{"key":"ai_daily_memo","term":"AI Daily Memo","definition":"What the AI thought about today's activity, written for a human to read. It is advisory; you are still the one who approves changes.","topic_link":"#home"},{"key":"latest_prices","term":"Latest Prices","definition":"The most recent prices the system has on file for tracked symbols. Stale prices are flagged so you know not to trust them.","topic_link":"#home"},{"key":"operator_controls","term":"Operator Controls","definition":"Buttons that let you pause trading, arm the kill switch, force a broker reconciliation, or save today's report.","topic_link":"#home"},{"key":"model_arena","term":"Model Arena","definition":"Where current and candidate strategies are scored side by side. Promotion never happens automatically \u2014 the operator decides.","topic_link":"#strategies"},{"key":"reports_and_learning","term":"Reports And Learning","definition":"Where today's report was saved and whether nightly learning produced any new recommendations.","topic_link":"#home"},{"key":"accounting","term":"Tax Estimate","definition":"A rough estimate of what taxes might look like on closed positions. Research-only \u2014 not filing-grade accounting.","topic_link":"#paper"},{"key":"nightly_learning","term":"Nightly Learning","definition":"After each trading day we re-evaluate candidate models against the active one. If a candidate is meaningfully better, we'll recommend it \u2014 but never replace anything without your approval.","topic_link":"#research"},{"key":"walk_forward","term":"Walk-forward","definition":"Testing a model by re-fitting it on rolling windows of history and scoring it on the next window. More honest than a single backtest because it can't peek at the future.","topic_link":"#research"},{"key":"research_memo","term":"Research memo","definition":"The AI's nightly written summary of what it studied, what it found, and what it recommends. Written to be read by a human, not parsed by a machine.","topic_link":"#research"},{"key":"score_delta","term":"Score delta","definition":"How much better (or worse) the challenger scored than the current champion. Positive means the challenger looks better \u2014 but \"better\" needs more than one number.","topic_link":"#research"}],"actions":[{"id":"toggle-vocab","label":"Toggle Plain / Technical"},{"id":"start-tour","label":"Take the dashboard tour"},{"id":"open-whats-this","label":"Open What's-this for current screen"},{"id":"show-shortcuts","label":"Show keyboard shortcuts"}]}</script>
 
 </body>
 </html>

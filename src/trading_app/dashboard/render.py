@@ -10,10 +10,12 @@ each screen's layout in ``screens/<name>.py``.
 
 from __future__ import annotations
 
+import json
 from html import escape
 from pathlib import Path
 
 from trading_app.dashboard import components as C
+from trading_app.dashboard import glossary as _glossary
 from trading_app.dashboard.models import OperatorDashboardSnapshot
 from trading_app.dashboard.screens import (
     ai_review,
@@ -82,6 +84,9 @@ def render_dashboard_html(
   </div>
   {C.tour()}
   {C.whats_this_panel()}
+  {C.command_palette()}
+  {C.shortcuts_help()}
+  <script id="cmd-index-data" type="application/json">{_command_index_json()}</script>
 {body_script}
 </body>
 </html>
@@ -103,3 +108,42 @@ def render_interactive_dashboard_html(snapshot: OperatorDashboardSnapshot) -> st
     """Render the local web-app shell with browser-side JSON refresh."""
 
     return render_dashboard_html(snapshot, interactive=True)
+
+
+def _command_index_json() -> str:
+    """Static search index for the ⌘K palette.
+
+    Symbols/positions come from the snapshot at refresh time via JS; the
+    static list here covers screens, glossary terms, and quick actions.
+    """
+
+    screens = [
+        {"id": "home", "label": "Home", "sub": "Command Center"},
+        {"id": "strategies", "label": "Models", "sub": "Active strategy + arena"},
+        {"id": "paper", "label": "Paper Trading", "sub": "Positions · fills · taxes"},
+        {"id": "risk", "label": "Risk", "sub": "Severity · exposures · kill switch"},
+        {"id": "research", "label": "Research Lab", "sub": "Nightly learning · health"},
+        {"id": "ai", "label": "AI Review", "sub": "Governance · readiness"},
+        {"id": "learn", "label": "Learn", "sub": "Plain-language reference"},
+    ]
+    terms = [
+        {
+            "key": key,
+            "term": term,
+            "definition": definition,
+            "topic_link": _glossary.deep_link_for(key, "#home")
+            if hasattr(_glossary, "deep_link_for")
+            else "#home",
+        }
+        for key, (term, definition) in _glossary.GLOSSARY.items()
+    ]
+    actions = [
+        {"id": "toggle-vocab", "label": "Toggle Plain / Technical"},
+        {"id": "start-tour", "label": "Take the dashboard tour"},
+        {"id": "open-whats-this", "label": "Open What's-this for current screen"},
+        {"id": "show-shortcuts", "label": "Show keyboard shortcuts"},
+    ]
+    return json.dumps(
+        {"screens": screens, "terms": terms, "actions": actions},
+        separators=(",", ":"),
+    )

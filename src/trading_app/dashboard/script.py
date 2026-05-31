@@ -128,7 +128,7 @@ _SCRIPT = """
       const points = values.map((value, index) => {
         const x = padL + (index / (values.length - 1)) * innerW;
         const y = padT + innerH - ((value - min) / spread) * innerH;
-        return [x, y];
+        return [x, y, value];
       });
       const baselineY = padT + innerH;
       const linePath = 'M ' + points.map((p) => p[0].toFixed(2) + ' ' + p[1].toFixed(2)).join(' L ');
@@ -146,6 +146,8 @@ _SCRIPT = """
         return `<text class="axis-text" x="${x.toFixed(1)}" y="${(h - 10).toFixed(1)}" text-anchor="end">${text}</text>`;
       }).join('');
       const last = points[points.length - 1];
+      // Period labels — synthesized; tooltip date uses these
+      const periodLabels = ['Earlier', 'Midpoint', 'Peak', 'Pull-back', 'Now'];
       target.innerHTML = `
         <svg class="area-chart" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Paper equity curve">
           <defs>
@@ -163,7 +165,76 @@ _SCRIPT = """
           <path d="${linePath}" class="line-${series}" />
           <circle class="end-dot ${positive ? '' : 'neg'}" cx="${last[0].toFixed(2)}" cy="${last[1].toFixed(2)}" r="3.5" />
           ${labels}
-        </svg>`;
+        </svg>
+        <div class="hero-chart__overlay" data-hero-overlay>
+          <div class="hero-chart__cross" data-hero-cross></div>
+          <div class="hero-chart__dot" data-hero-dot></div>
+          <div class="hero-chart__tip" data-hero-tip></div>
+        </div>`;
+      wireHeroCrosshair(target, points, periodLabels, w, h, padT, padB, positive);
+    }
+
+    function wireHeroCrosshair(container, points, periodLabels, w, h, padT, padB, positive) {
+      const overlay = container.querySelector('[data-hero-overlay]');
+      const cross = container.querySelector('[data-hero-cross]');
+      const dot = container.querySelector('[data-hero-dot]');
+      const tip = container.querySelector('[data-hero-tip]');
+      if (!overlay || !cross || !dot || !tip) return;
+      const baselineY = padT + (h - padT - padB);
+
+      function showAt(idx) {
+        if (idx < 0 || idx >= points.length) return;
+        const [px, py, value] = points[idx];
+        // points are in chart viewBox units; convert to percentage within
+        // the chart container so the overlay scales with CSS sizing.
+        const xPct = (px / w) * 100;
+        const yPct = (py / h) * 100;
+        cross.style.left = xPct + '%';
+        cross.style.display = 'block';
+        dot.style.left = xPct + '%';
+        dot.style.top = yPct + '%';
+        dot.style.display = 'block';
+        dot.classList.toggle('neg', !positive);
+        tip.style.display = 'block';
+        tip.style.left = xPct + '%';
+        tip.classList.toggle('neg', !positive);
+        const label = periodLabels[idx] || '';
+        tip.innerHTML = `<span class="hero-chart__tip-label">${escapeHtml(label)}</span><span class="hero-chart__tip-value mono">${money(value)}</span>`;
+        // Flip tip to the left of the crosshair when near the right edge.
+        if (xPct > 78) tip.classList.add('hero-chart__tip--left');
+        else tip.classList.remove('hero-chart__tip--left');
+      }
+
+      function hide() {
+        cross.style.display = 'none';
+        dot.style.display = 'none';
+        tip.style.display = 'none';
+      }
+
+      function nearestIndex(clientX) {
+        const rect = overlay.getBoundingClientRect();
+        const localX = clientX - rect.left;
+        const ratio = Math.max(0, Math.min(1, localX / rect.width));
+        // points x coords are in chart viewBox units; nearest by viewBox x.
+        const targetX = ratio * w;
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < points.length; i++) {
+          const d = Math.abs(points[i][0] - targetX);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        return bestIdx;
+      }
+
+      overlay.addEventListener('mousemove', (event) => showAt(nearestIndex(event.clientX)));
+      overlay.addEventListener('mouseleave', hide);
+      overlay.addEventListener('touchstart', (event) => {
+        if (event.touches[0]) showAt(nearestIndex(event.touches[0].clientX));
+      }, { passive: true });
+      overlay.addEventListener('touchmove', (event) => {
+        if (event.touches[0]) showAt(nearestIndex(event.touches[0].clientX));
+      }, { passive: true });
+      overlay.addEventListener('touchend', hide);
     }
 
     function wirePeriods() {
@@ -891,11 +962,301 @@ _SCRIPT = """
       });
     }
 
+    // -----------------------------------------------------------------
+    // Command palette (⌘K) + keyboard shortcuts
+    // -----------------------------------------------------------------
+    let __cmdIndex = { screens: [], terms: [], actions: [] };
+    let __cmdSelected = 0;
+    let __cmdResults = [];
+
+    function loadCmdIndex() {
+      const node = document.getElementById('cmd-index-data');
+      if (!node) return;
+      try { __cmdIndex = JSON.parse(node.textContent || '{}'); } catch (_e) { /* ignore */ }
+    }
+
+    function symbolsFromSnapshot() {
+      const snap = window.__lastSnapshot;
+      if (!snap) return [];
+      const seen = new Set();
+      const out = [];
+      const positions = ((snap.paper_report || {}).ledger_snapshot || {}).positions || [];
+      positions.forEach((p) => {
+        const sym = (p.symbol || '').toUpperCase();
+        if (!sym || seen.has(sym)) return;
+        seen.add(sym);
+        out.push({ symbol: sym, kind: 'position', sub: `${p.quantity} sh · avg ${money(p.average_cost)}` });
+      });
+      (snap.recent_fills || []).forEach((f) => {
+        const sym = (f.symbol || '').toUpperCase();
+        if (!sym || seen.has(sym)) return;
+        seen.add(sym);
+        const side = enumValue(f.side, 'UNKNOWN');
+        out.push({ symbol: sym, kind: 'fill', sub: `${side} ${f.quantity} @ ${money(f.price)}` });
+      });
+      return out;
+    }
+
+    function highlight(label, query) {
+      if (!query) return escapeHtml(label);
+      const idx = label.toLowerCase().indexOf(query.toLowerCase());
+      if (idx === -1) return escapeHtml(label);
+      const before = escapeHtml(label.slice(0, idx));
+      const hit = escapeHtml(label.slice(idx, idx + query.length));
+      const after = escapeHtml(label.slice(idx + query.length));
+      return `${before}<em>${hit}</em>${after}`;
+    }
+
+    function score(haystack, query) {
+      const h = haystack.toLowerCase();
+      const q = query.toLowerCase();
+      if (!q) return 0;
+      if (h === q) return 100;
+      if (h.startsWith(q)) return 60;
+      const wordStart = h.split(/[^a-z0-9]/).some((w) => w.startsWith(q));
+      if (wordStart) return 40;
+      if (h.includes(q)) return 20;
+      return 0;
+    }
+
+    function buildResults(query) {
+      const out = [];
+      (__cmdIndex.screens || []).forEach((s) => {
+        const sc = Math.max(score(s.label, query), score(s.id, query), score(s.sub || '', query) * 0.5);
+        if (sc > 0 || !query) {
+          out.push({
+            kind: 'Screen', title: s.label, sub: s.sub || '',
+            hash: '#' + s.id, score: sc + 10, action: { type: 'nav', hash: '#' + s.id }
+          });
+        }
+      });
+      (__cmdIndex.terms || []).forEach((t) => {
+        const sc = Math.max(score(t.term, query), score(t.definition, query) * 0.3);
+        if (sc > 0) {
+          out.push({
+            kind: 'Term', title: t.term, sub: t.definition,
+            score: sc, action: { type: 'term', hash: t.topic_link || '#learn', term: t.term }
+          });
+        }
+      });
+      symbolsFromSnapshot().forEach((s) => {
+        const sc = score(s.symbol, query);
+        if (sc > 0 || !query) {
+          out.push({
+            kind: 'Symbol', title: s.symbol, sub: s.sub,
+            score: sc + 5, action: { type: 'nav', hash: '#paper' }
+          });
+        }
+      });
+      (__cmdIndex.actions || []).forEach((a) => {
+        const sc = score(a.label, query);
+        if (sc > 0 || !query) {
+          out.push({
+            kind: 'Action', title: a.label, sub: '',
+            score: sc, action: { type: 'action', id: a.id }
+          });
+        }
+      });
+      out.sort((a, b) => b.score - a.score);
+      return out.slice(0, 24);
+    }
+
+    function renderCmdResults(query) {
+      __cmdResults = buildResults(query);
+      const target = document.querySelector('[data-cmd-results]');
+      if (!target) return;
+      if (!__cmdResults.length) {
+        target.innerHTML = '<div class="cmd__empty">No matches. Try a screen name, glossary term, or symbol.</div>';
+        return;
+      }
+      __cmdSelected = 0;
+      const groups = {};
+      __cmdResults.forEach((r, i) => {
+        (groups[r.kind] = groups[r.kind] || []).push({ r, i });
+      });
+      const order = ['Screen', 'Symbol', 'Term', 'Action'];
+      let html = '';
+      order.forEach((kind) => {
+        const list = groups[kind];
+        if (!list || !list.length) return;
+        html += `<div class="cmd__section">${escapeHtml(kind)}s</div>`;
+        list.forEach(({ r, i }) => {
+          const sel = i === __cmdSelected ? 'true' : 'false';
+          html += `
+            <div class="cmd__row" role="option" data-cmd-row="${i}" aria-selected="${sel}">
+              <div class="cmd__row-label">
+                <div class="cmd__row-title">${highlight(r.title, query)}</div>
+                ${r.sub ? `<div class="cmd__row-sub">${escapeHtml(r.sub)}</div>` : ''}
+              </div>
+              <div class="cmd__row-kind">${escapeHtml(r.kind)}</div>
+            </div>`;
+        });
+      });
+      target.innerHTML = html;
+      target.querySelectorAll('[data-cmd-row]').forEach((row) => {
+        row.addEventListener('mouseenter', () => setCmdSelected(parseInt(row.dataset.cmdRow, 10)));
+        row.addEventListener('click', () => activateCmd(parseInt(row.dataset.cmdRow, 10)));
+      });
+    }
+
+    function setCmdSelected(idx) {
+      if (idx < 0 || idx >= __cmdResults.length) return;
+      __cmdSelected = idx;
+      document.querySelectorAll('[data-cmd-row]').forEach((r) => {
+        r.setAttribute('aria-selected', parseInt(r.dataset.cmdRow, 10) === idx ? 'true' : 'false');
+      });
+      const sel = document.querySelector(`[data-cmd-row="${idx}"]`);
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    function activateCmd(idx) {
+      const result = __cmdResults[idx];
+      if (!result) return;
+      closeCmd();
+      const act = result.action;
+      if (act.type === 'nav') {
+        if (window.location.hash !== act.hash) window.location.hash = act.hash;
+        else activateScreen(act.hash.replace(/^#/, ''));
+      } else if (act.type === 'term') {
+        if (window.location.hash !== act.hash) window.location.hash = act.hash;
+        window.setTimeout(() => {
+          const trigger = document.querySelector('[data-whats-this-open]');
+          if (trigger) trigger.click();
+        }, 80);
+      } else if (act.type === 'action') {
+        if (act.id === 'toggle-vocab') {
+          const current = document.documentElement.dataset.vocab || 'plain';
+          setVocab(current === 'plain' ? 'technical' : 'plain');
+        } else if (act.id === 'start-tour') {
+          beginTour();
+        } else if (act.id === 'open-whats-this') {
+          const trigger = document.querySelector('[data-whats-this-open]');
+          if (trigger) trigger.click();
+        } else if (act.id === 'show-shortcuts') {
+          openShortcuts();
+        }
+      }
+    }
+
+    function openCmd() {
+      loadCmdIndex();
+      const wrap = document.querySelector('[data-cmd]');
+      const input = document.querySelector('[data-cmd-input]');
+      if (!wrap || !input) return;
+      wrap.hidden = false;
+      input.value = '';
+      renderCmdResults('');
+      window.setTimeout(() => input.focus(), 10);
+    }
+
+    function closeCmd() {
+      const wrap = document.querySelector('[data-cmd]');
+      if (wrap) wrap.hidden = true;
+    }
+
+    function wireCmd() {
+      const input = document.querySelector('[data-cmd-input]');
+      if (input) {
+        input.addEventListener('input', () => renderCmdResults(input.value.trim()));
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'ArrowDown') { event.preventDefault(); setCmdSelected(Math.min(__cmdSelected + 1, __cmdResults.length - 1)); }
+          else if (event.key === 'ArrowUp') { event.preventDefault(); setCmdSelected(Math.max(__cmdSelected - 1, 0)); }
+          else if (event.key === 'Enter') { event.preventDefault(); activateCmd(__cmdSelected); }
+        });
+      }
+      document.querySelectorAll('[data-cmd-close]').forEach((b) => b.addEventListener('click', closeCmd));
+    }
+
+    function openShortcuts() {
+      const wrap = document.querySelector('[data-shortcuts]');
+      if (wrap) wrap.hidden = false;
+    }
+    function closeShortcuts() {
+      const wrap = document.querySelector('[data-shortcuts]');
+      if (wrap) wrap.hidden = true;
+    }
+    function wireShortcuts() {
+      document.querySelectorAll('[data-shortcuts-close]').forEach((b) =>
+        b.addEventListener('click', closeShortcuts));
+    }
+
+    function isTypingInField(event) {
+      const t = event.target;
+      if (!t) return false;
+      const tag = t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (t.isContentEditable) return true;
+      return false;
+    }
+
+    let __goMode = false;
+    let __goTimer = null;
+    const GO_MAP = {
+      h: 'home', m: 'strategies', p: 'paper', r: 'risk',
+      l: 'research', a: 'ai'
+    };
+
+    function wireGlobalKeys() {
+      document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          openCmd();
+          return;
+        }
+        if (event.key === 'Escape') {
+          const cmd = document.querySelector('[data-cmd]');
+          if (cmd && !cmd.hidden) { closeCmd(); return; }
+          const sc = document.querySelector('[data-shortcuts]');
+          if (sc && !sc.hidden) { closeShortcuts(); return; }
+          const wt = document.querySelector('[data-whats-this]');
+          if (wt && !wt.hidden) {
+            const closer = document.querySelector('[data-whats-this-close]');
+            if (closer) closer.click();
+            return;
+          }
+          const tr = document.querySelector('[data-tour]');
+          if (tr && !tr.hidden) { endTour(); return; }
+          return;
+        }
+        if (isTypingInField(event)) return;
+
+        if (event.key === 'g' && !__goMode) {
+          __goMode = true;
+          if (__goTimer) clearTimeout(__goTimer);
+          __goTimer = window.setTimeout(() => { __goMode = false; }, 800);
+          return;
+        }
+        if (__goMode) {
+          __goMode = false;
+          if (__goTimer) clearTimeout(__goTimer);
+          const k = event.key.toLowerCase();
+          const target = GO_MAP[k] || (event.key === '?' ? 'learn' : null);
+          if (target) {
+            event.preventDefault();
+            if (window.location.hash !== '#' + target) window.location.hash = '#' + target;
+            else activateScreen(target);
+          }
+          return;
+        }
+        if (event.key === '/') { event.preventDefault(); openCmd(); return; }
+        if (event.key === '?') { event.preventDefault(); openShortcuts(); return; }
+        if (event.key.toLowerCase() === 't') {
+          event.preventDefault();
+          const current = document.documentElement.dataset.vocab || 'plain';
+          setVocab(current === 'plain' ? 'technical' : 'plain');
+        }
+      });
+    }
+
     wireNav();
     wirePeriods();
     wireVocabToggle();
     wireTour();
     wireWhatsThis();
+    wireCmd();
+    wireShortcuts();
+    wireGlobalKeys();
+    loadCmdIndex();
     refreshDashboardSnapshot();
     window.setInterval(refreshDashboardSnapshot, 5000);
   </script>"""
