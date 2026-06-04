@@ -69,7 +69,27 @@ placeholder template.
 
 ## Recommended One-Command Startup
 
-The preferred supervised startup path is:
+The easiest local startup path from the project root is:
+
+```bash
+uv run dev
+```
+
+or, if you prefer Make-style commands:
+
+```bash
+make dev
+```
+
+The shortcut loads `.env` when present, leaves already-exported shell values in
+place, honors the `TRADING_APP_*` runtime defaults from that file, runs the
+required monitor-only dry run first, and then starts the always-on Alpaca paper
+runtime only if the safety checks pass. The Python backend stays on
+`http://127.0.0.1:8765`; the operator dashboard is the Next.js service at
+`http://127.0.0.1:3003`. If the backend port is already in use, the shortcut
+automatically tries the next local port and prints the URL it selected.
+
+The equivalent explicit supervised startup path is:
 
 ```bash
 python -m trading_app.runtime.run_alpaca_paper --monitor-only-dry-run-first
@@ -255,13 +275,19 @@ Market-hours success criteria:
 To start the supervised always-on runtime:
 
 ```bash
-python -m trading_app.runtime.run_alpaca_paper --monitor-only-dry-run-first
+uv run dev
 ```
 
-Keep the dashboard local at:
+Keep the Python backend/API local at:
 
 ```text
 http://127.0.0.1:8765
+```
+
+Use the Next.js operator dashboard at:
+
+```text
+http://127.0.0.1:3003
 ```
 
 After 16:00 ET, wait for the regular close path, daily report, and nightly
@@ -311,13 +337,13 @@ python -m trading_app.runtime.review \
   --broker-order-history path/to/broker-order-history.json
 ```
 
-When reviewing exported dashboards or local supervisor logs, include those paths
-in the one-command review secret scan:
+When reviewing Next build artifacts, browser captures, or local supervisor logs,
+include those paths in the one-command review secret scan:
 
 ```bash
 python -m trading_app.runtime.review \
   --output-dir data/runtime \
-  --include-secret-scan-path path/to/operator-dashboard.html \
+  --include-secret-scan-path path/to/next-dashboard-capture.html \
   --include-secret-scan-path path/to/runtime.log
 ```
 
@@ -368,9 +394,10 @@ Expected result:
   the reviewed paper session.
 - Dashboard consistency confirms operator controls, alerts, and health state
   match the persisted runtime snapshot.
-- Dashboard visual-readiness confirms the rendered cockpit exposes the paper
-  boundary, runtime surfaces, controls, alerts, data-quality evidence, active
-  model, live-readiness gate, financial visuals, and responsive layout structure.
+- Dashboard visual-readiness confirms the Next dashboard handoff and persisted
+  snapshot expose the paper boundary, runtime surfaces, controls, alerts,
+  data-quality evidence, active model, live-readiness gate, financial visuals,
+  and responsive layout structure.
 - Functional completion audit runs.
 - Artifact integrity manifest hashes the reviewed local evidence files.
 - The operator evidence bundle is generated.
@@ -413,13 +440,13 @@ credential values:
 python -m trading_app.runtime.security --output-dir data/runtime
 ```
 
-When you export dashboard HTML, collect local supervisor logs, or review other
+When you collect Next dashboard captures, local supervisor logs, or other
 session artifacts outside `data/runtime`, include them explicitly:
 
 ```bash
 python -m trading_app.runtime.security \
   --output-dir data/runtime \
-  --include-path path/to/operator-dashboard.html \
+  --include-path path/to/next-dashboard-capture.html \
   --include-path path/to/runtime.log
 ```
 
@@ -534,7 +561,7 @@ Expected result:
 - A Markdown dashboard-consistency report is written under
   `data/runtime/reports/`.
 
-Then confirm the rendered cockpit exposes the critical operator surfaces:
+Then confirm the Next dashboard handoff exposes the critical operator surfaces:
 
 ```bash
 python -m trading_app.runtime.dashboard_visual --output-dir data/runtime
@@ -542,16 +569,16 @@ python -m trading_app.runtime.dashboard_visual --output-dir data/runtime
 
 Expected result:
 
-- The rendered dashboard shows `Alpaca Paper`, the paper/live boundary, and live
-  readiness as gated.
+- The persisted dashboard snapshot shows `Alpaca Paper`, the paper/live
+  boundary, and live readiness as gated.
 - Latest prices, broker connection, cash, positions, orders, fills, risk,
   reconciliation, reports, learning, alerts, and incidents are visible.
-- Operator controls are rendered and wired to the local control endpoint.
+- Next operator controls are present and wired to the local control endpoint.
 - Data-quality evidence and active-model explanation panels are present.
 - Responsive CSS, financial visuals, and the neon future-finance visual tokens
-  are present.
-- A rendered HTML copy and Markdown dashboard visual-readiness report are
-  written under `data/runtime/`.
+  are present in the Next source.
+- A Markdown dashboard visual-readiness report is written under
+  `data/runtime/reports/`.
 
 Then run the restart recovery audit:
 
@@ -921,21 +948,188 @@ Use this only when:
 Start the runtime only after preflight and dry run are acceptable:
 
 ```bash
-python -m trading_app.runtime.run_alpaca_paper --monitor-only-dry-run-first
+uv run dev
 ```
 
-Local dashboard default:
+Local Python backend/API default:
 
 ```text
 http://127.0.0.1:8765
 ```
 
+Canonical operator dashboard:
+
+```text
+http://127.0.0.1:3003
+```
+
 The runtime runs continuously until interrupted.
+
+## Next.js Operator UI
+
+The incremental React/Next.js operator UI lives in `web/`. It is a frontend and
+backend-for-frontend proxy only; Python remains the paper-runtime authority.
+
+Run the Python backend first:
+
+```bash
+uv run dev
+```
+
+Then run the Next.js UI. The Next dashboard carries the Python cockpit screens
+over as React tabs while keeping the Python runtime as the only trading
+authority:
+
+```bash
+make web-install
+make web-dev
+```
+
+The Next.js route handlers proxy `/api/snapshot`, `/api/health`, and
+`/api/control` to the Python backend URL from server-only
+`TRADING_APP_BACKEND_URL`, defaulting to `http://127.0.0.1:8765`.
+
+Before relying on frontend changes, run:
+
+```bash
+make web-check
+```
+
+For a production-style local Next.js run, use:
+
+```bash
+make web-start
+```
+
+This runs `next start` on `http://127.0.0.1:3003/` after building the app and
+continues to proxy browser API calls to the Python backend.
+
+## macOS Automatic Startup
+
+After manual startup and market-hours validation are clean, install the local
+macOS LaunchAgent:
+
+```bash
+scripts/install_alpaca_paper_launchd.sh
+```
+
+This writes:
+
+```text
+~/Library/LaunchAgents/com.trading-app.alpaca-paper.plist
+```
+
+and starts the same paper-only runtime command through:
+
+```text
+~/Library/Application Support/trading-app/run_alpaca_paper_runtime.sh
+```
+
+The installer copies `.env` into:
+
+```text
+~/Library/Application Support/trading-app/alpaca-paper.env
+```
+
+with owner-only permissions. The repo `.env` remains the source file, but
+launchd reads the App Support copy because shell jobs launched from macOS may
+not be allowed to read files directly under `Documents`.
+
+The Python LaunchAgent uses one canonical backend URL:
+
+```text
+http://127.0.0.1:8765/
+```
+
+It does not auto-select a different port. If `8765` is occupied, startup fails
+loudly and writes logs under `data/runtime/logs/`. Stop the old process and
+restart the service rather than letting the backend move to a surprise URL.
+
+Install the Next.js operator dashboard as a separate LaunchAgent after the
+Python backend service is in place:
+
+```bash
+scripts/install_operator_web_launchd.sh
+```
+
+This writes:
+
+```text
+~/Library/LaunchAgents/com.trading-app.operator-web.plist
+```
+
+and starts production Next.js through:
+
+```text
+~/Library/Application Support/trading-app/run_operator_web.sh
+```
+
+The web service listens at:
+
+```text
+http://127.0.0.1:3003/
+```
+
+and proxies to:
+
+```text
+http://127.0.0.1:8765/
+```
+
+The web LaunchAgent writes only non-secret web service config to:
+
+```text
+~/Library/Application Support/trading-app/operator-web.env
+```
+
+Do not move Alpaca credentials into the web service. Python remains the paper
+runtime authority and owns broker credentials, scheduling, and operator
+controls.
+
+Check service status:
+
+```bash
+scripts/status_alpaca_paper_launchd.sh
+scripts/status_operator_web_launchd.sh
+```
+
+Uninstall the LaunchAgent:
+
+```bash
+scripts/uninstall_alpaca_paper_launchd.sh
+scripts/uninstall_operator_web_launchd.sh
+```
+
+Restart after changing `.env` or code:
+
+```bash
+scripts/install_alpaca_paper_launchd.sh
+scripts/install_operator_web_launchd.sh
+```
+
+Rerunning the Python installer refreshes the App Support wrapper and env copy,
+stops the existing LaunchAgent if it is already loaded, then starts it again on
+the same fixed backend port. Rerunning the web installer refreshes the Next.js
+build and restarts the operator dashboard on the same fixed web port.
+
+The first launchd version uses `KeepAlive=false`. If either service exits,
+inspect logs before starting it again:
+
+```bash
+tail -100 data/runtime/logs/launchd.out.log
+tail -100 data/runtime/logs/launchd.err.log
+tail -100 data/runtime/logs/operator-web.launchd.out.log
+tail -100 data/runtime/logs/operator-web.launchd.err.log
+```
+
+After several clean supervised soaks, we can deliberately change the plist to
+restart on failure. Do not enable automatic restarts before the failure modes are
+well understood.
 
 ## Optional Process Supervision Templates
 
-After repeated clean supervised paper soaks, you can generate local process
-supervisor templates for review:
+If you only want reviewable templates without installing a service, generate
+them locally:
 
 ```bash
 python -m trading_app.runtime.ops --write-supervisor-dir data/runtime/supervision
@@ -948,9 +1142,8 @@ This writes:
 
 The generated templates run the same paper-only startup command with
 `--monitor-only-dry-run-first`. They reference a local env file path but do not
-include Alpaca credential values. Review the templates before installing them;
-do not install them until manual startup, validation, secret scanning, and a
-full-day plus overnight paper soak are clean.
+include Alpaca credential values. Treat these as review artifacts; use the
+scripts above for the actual macOS LaunchAgent install.
 
 ## Runtime Artifact Layout
 

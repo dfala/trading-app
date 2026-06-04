@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
+from http.client import HTTPConnection
+from threading import Thread
 
 import pytest
 
 from trading_app.dashboard import (
     build_demo_dashboard_snapshot,
-    render_dashboard_html,
-    write_dashboard,
 )
-from trading_app.dashboard.render import render_interactive_dashboard_html
+from trading_app.dashboard.model_performance import _strategy_profile
 from trading_app.dashboard.server import (
     create_dashboard_server,
     dashboard_response,
     is_local_dashboard_host,
+    is_local_dashboard_url,
     snapshot_json,
+)
+from trading_app.strategies.catalog import (
+    benchmark_relative_strength_etf_definition,
 )
 
 
@@ -49,118 +54,40 @@ def test_dashboard_snapshot_contains_operator_state() -> None:
     assert snapshot.statement_reconciliation_path is not None
 
 
-def test_dashboard_html_renders_required_sections_and_visuals() -> None:
-    html = render_dashboard_html(build_demo_dashboard_snapshot())
+def test_dashboard_response_returns_503_when_snapshot_provider_raises() -> None:
+    def failing_provider():
+        raise RuntimeError("snapshot failed")
 
-    assert "Operator Dashboard" in html
-    assert "Paper Command Center" in html
-    assert "Paper Portfolio" in html
-    assert "Paper Boundary" in html
-    assert "Latest Prices" in html
-    assert "Data Quality Evidence" in html
-    assert "Runtime Proof" in html
-    assert "Functional Readiness" in html
-    assert "Final Acceptance" in html
-    assert "Statement Review" in html
-    assert "Reports And Learning" in html
-    assert "AI copilot confidence" in html
-    assert "manual review is required" in html
-    assert "Audit Trail" in html
-    assert "Report path" in html
-    assert "Accounting" in html
-    assert "Tax Estimate" in html
-    assert "Research estimate only" in html
-    assert "No statement differences above tolerance" in html
-    assert "Not filing-grade tax accounting" in html
-    assert "Risk State" in html
-    assert "Model Arena" in html
-    assert "Daily Report" in html
-    assert "Operator Controls" in html
-    assert "Runtime Alerts" in html
-    assert "Runtime Health" in html
-    assert "Incident Command" in html
-    assert "Active Model" in html
-    assert "Monthly Sector ETF Momentum" in html
-    assert "Known Failure Modes" in html
-    assert "AI Role" in html
-    assert "Rejected Signals" in html
-    assert "Nightly Learning" in html
-    assert "Live Readiness" in html
-    assert "Positions" in html
-    assert "Recent Fills" in html
-    assert "IEX development-grade demo feed" in html
-    assert "IEX/free data is development-grade" in html
-    assert "Kill switch OFF" in html
-    assert "MAX_ORDERS_PER_DAY" in html
-    assert "No live-money actions are available" in html
-    assert "Benchmark" in html
-    assert 'data-field="estimated-equity"' in html
-    assert "data-latest-price-list" in html
-    assert 'data-field="data-quality-status"' in html
-    assert 'data-field="data-quality-chip"' in html
-    assert 'data-field="data-quality-research-usable"' in html
-    assert 'data-field="data-quality-trading-usable"' in html
-    assert 'data-field="data-quality-sources"' in html
-    assert 'data-field="data-quality-feeds"' in html
-    assert "data-data-quality-issue-list" in html
-    assert 'data-field="completion-status"' in html
-    assert 'data-field="completion-path"' in html
-    assert 'data-field="final-acceptance-status"' in html
-    assert 'data-field="final-acceptance-path"' in html
-    assert 'data-field="statement-status"' in html
-    assert 'data-field="statement-path"' in html
-    assert "data-statement-issue-list" in html
-    assert 'data-field="tax-active-lots"' in html
-    assert 'data-field="tax-lot-method"' in html
-    assert 'data-field="tax-estimated-tax"' in html
-    assert "data-alert-list" in html
-    assert "data-position-list" in html
-    assert "data-fill-list" in html
-    assert "data-health-check-list" in html
-    assert "data-incident-list" in html
-    assert "data-control-grid" in html
-    assert 'data-field="last-control-action"' in html
-    assert 'data-field="daily-report-path"' in html
-    assert 'data-field="learning-memo-path"' in html
-    assert 'data-field="live-readiness-panel-status"' in html
-    assert 'data-field="broker-connection"' in html
-    assert 'data-field="active-model-key"' in html
-    assert 'data-field="trading-authority"' in html
-    assert 'data-field="active-strategy-name"' in html
-    assert "data-active-strategy-failure-list" in html
-    assert "data-active-strategy-ai-role-list" in html
-    assert "Daily close only" in html
-    assert "Strategy authority remains schedule-bound" in html
-    assert "$0 real capital" in html
-    assert "overflow-wrap: anywhere" in html
-    assert html.count("<svg") >= 2
+    status, content_type, body = dashboard_response(
+        "/api/snapshot",
+        snapshot_provider=failing_provider,
+    )
+    payload = json.loads(body)
+
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert content_type == "application/json; charset=utf-8"
+    assert payload == {
+        "error": "dashboard snapshot unavailable",
+        "detail": "snapshot failed",
+    }
 
 
-def test_interactive_dashboard_shell_fetches_snapshot_api() -> None:
-    html = render_interactive_dashboard_html(build_demo_dashboard_snapshot())
+def test_dashboard_response_returns_503_when_health_provider_raises() -> None:
+    def failing_health_provider():
+        raise RuntimeError("health failed")
 
-    assert "fetch('/api/snapshot'" in html
-    assert "fetch('/api/control'" in html
-    assert "function applySnapshot" in html
-    assert "renderRuntimeProof(snapshot)" in html
-    assert "renderActiveStrategy(snapshot)" in html
-    assert "renderFinalAcceptance(snapshot)" in html
-    assert "renderLatestPrices(snapshot)" in html
-    assert "renderDataQuality(snapshot)" in html
-    assert "renderStatementReview(snapshot)" in html
-    assert "renderAlerts(snapshot)" in html
-    assert "renderPositions(snapshot)" in html
-    assert "renderFills(snapshot)" in html
-    assert "renderHealth(snapshot)" in html
-    assert "renderControls(snapshot)" in html
-    assert "renderReports(snapshot)" in html
-    assert "renderLiveReadiness(snapshot)" in html
-    assert "completion_audit" in html
-    assert "final_acceptance" in html
-    assert "tax_active_lot_count" not in html
-    assert "tax-active-lots" in html
-    assert "setInterval" in html
-    assert "data-refresh-time" in html
+    status, content_type, body = dashboard_response(
+        "/api/health",
+        health_provider=failing_health_provider,
+    )
+    payload = json.loads(body)
+
+    assert status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert content_type == "application/json; charset=utf-8"
+    assert payload == {
+        "error": "dashboard health unavailable",
+        "detail": "health failed",
+    }
 
 
 def test_dashboard_snapshot_serializes_for_api() -> None:
@@ -194,8 +121,8 @@ def test_dashboard_snapshot_serializes_for_api() -> None:
     assert payload["active_strategy_definition"]["authority"] == "paper"
 
 
-def test_dashboard_server_route_logic_serves_html_and_json() -> None:
-    html_status, html_type, html = dashboard_response(
+def test_dashboard_server_route_logic_serves_moved_notice_and_json() -> None:
+    moved_status, moved_type, moved_body = dashboard_response(
         "/",
         snapshot_provider=build_demo_dashboard_snapshot,
     )
@@ -210,9 +137,9 @@ def test_dashboard_server_route_logic_serves_html_and_json() -> None:
     )
     health_payload = json.loads(health_body)
 
-    assert html_status.value == 200
-    assert html_type.startswith("text/html")
-    assert "Operator Dashboard" in html
+    assert moved_status == HTTPStatus.GONE
+    assert moved_type.startswith("text/plain")
+    assert "Next.js operator dashboard" in moved_body
     assert api_status.value == 200
     assert api_type.startswith("application/json")
     assert payload["mode"] == "Paper Trading"
@@ -221,21 +148,142 @@ def test_dashboard_server_route_logic_serves_html_and_json() -> None:
     assert health_payload["status"] == "degraded"
 
 
+def test_dashboard_model_performance_route(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_payload(model_key: str, *, universe_id: str | None = None):
+        return {
+            "model_key": model_key,
+            "universe_id": universe_id,
+            "points": [],
+        }
+
+    monkeypatch.setattr(
+        "trading_app.dashboard.server.build_model_performance_payload",
+        fake_payload,
+    )
+
+    missing_status, missing_type, missing_body = dashboard_response(
+        "/api/model-performance",
+        snapshot_provider=build_demo_dashboard_snapshot,
+    )
+    status, content_type, body = dashboard_response(
+        "/api/model-performance?model_key=test_strategy%3Av1&universe_id=semis",
+        snapshot_provider=build_demo_dashboard_snapshot,
+    )
+    payload = json.loads(body)
+
+    assert missing_status == HTTPStatus.BAD_REQUEST
+    assert missing_type.startswith("application/json")
+    assert json.loads(missing_body)["error"] == "model_key is required"
+    assert status == HTTPStatus.OK
+    assert content_type.startswith("application/json")
+    assert payload["model_key"] == "test_strategy:v1"
+    assert payload["universe_id"] == "semis"
+
+
+def test_model_strategy_profile_explains_catalog_definition() -> None:
+    definition = benchmark_relative_strength_etf_definition(
+        version="grid-l126-t63-n1",
+        universe=("QQQ", "XLK", "SMH", "SOXX", "SPY"),
+        lookback_days=126,
+        tracking_window_days=63,
+        top_n=1,
+    )
+
+    profile = _strategy_profile(definition, ("QQQ", "XLK", "SMH", "SOXX"))
+
+    assert profile is not None
+    assert profile.hypothesis == definition.hypothesis
+    assert profile.signal_logic == definition.signal_logic
+    assert profile.sizing_logic == "Equal weight the top 1 qualifying ETF(s)."
+    assert profile.exit_logic == definition.exit_logic
+    assert profile.trading_cadence == "daily_close"
+    assert profile.invests_in == ("QQQ", "XLK", "SMH", "SOXX")
+    assert profile.failure_modes == definition.failure_modes
+    assert profile.parameters["lookback_days"] == "126"
+    assert profile.parameters["tracking_window_days"] == "63"
+    assert profile.parameters["top_n"] == "1"
+    assert "universe" not in profile.parameters
+    assert "benchmark" not in profile.parameters
+
+
+def test_model_strategy_profile_is_none_without_catalog_definition() -> None:
+    assert _strategy_profile(None, ("QQQ",)) is None
+
+
+def test_dashboard_server_redirects_browser_routes_to_next_when_configured() -> None:
+    redirect_url = "http://127.0.0.1:3003/"
+    html_status, html_type, html_body = dashboard_response(
+        "/",
+        snapshot_provider=build_demo_dashboard_snapshot,
+        dashboard_redirect_url=redirect_url,
+    )
+    dashboard_status, _, dashboard_body = dashboard_response(
+        "/dashboard",
+        snapshot_provider=build_demo_dashboard_snapshot,
+        dashboard_redirect_url=redirect_url,
+    )
+    api_status, api_type, api_body = dashboard_response(
+        "/api/snapshot",
+        snapshot_provider=build_demo_dashboard_snapshot,
+        dashboard_redirect_url=redirect_url,
+    )
+
+    assert html_status == dashboard_status == HTTPStatus.FOUND
+    assert html_type.startswith("text/plain")
+    assert html_body == redirect_url
+    assert dashboard_body == redirect_url
+    assert api_status == HTTPStatus.OK
+    assert api_type.startswith("application/json")
+    assert json.loads(api_body)["mode"] == "Paper Trading"
+
+
+def test_dashboard_http_redirect_sets_location_header() -> None:
+    redirect_url = "http://127.0.0.1:3003/"
+    server = create_dashboard_server(
+        "127.0.0.1",
+        0,
+        dashboard_redirect_url=redirect_url,
+    )
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        connection = HTTPConnection(host, port, timeout=5)
+        try:
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            body = response.read().decode("utf-8")
+            connection.request("HEAD", "/dashboard")
+            head_response = connection.getresponse()
+            head_response.read()
+        finally:
+            connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert response.status == HTTPStatus.FOUND
+    assert response.getheader("Location") == redirect_url
+    assert redirect_url in body
+    assert head_response.status == HTTPStatus.FOUND
+    assert head_response.getheader("Location") == redirect_url
+    assert head_response.getheader("Content-Length") == "0"
+
+
 def test_dashboard_server_is_local_only_by_default() -> None:
     with pytest.raises(ValueError, match="local-only"):
         create_dashboard_server("0.0.0.0", 0)
 
     assert is_local_dashboard_host("127.0.0.1")
     assert not is_local_dashboard_host("0.0.0.0")
-
-
-def test_dashboard_writer_creates_reviewable_html_file(tmp_path) -> None:
-    output_path = write_dashboard(
-        build_demo_dashboard_snapshot(),
-        tmp_path / "operator-dashboard.html",
-    )
-
-    assert output_path.name == "operator-dashboard.html"
-    written = output_path.read_text(encoding="utf-8")
-    assert written.startswith("<!doctype html>")
-    assert "Trading Lab Operator Dashboard" in written
+    assert is_local_dashboard_url("http://127.0.0.1:3003/")
+    assert is_local_dashboard_url("http://localhost:3003/")
+    assert not is_local_dashboard_url("https://127.0.0.1:3003/")
+    assert not is_local_dashboard_url("http://example.com/")
+    with pytest.raises(ValueError, match="local-only"):
+        create_dashboard_server(
+            "127.0.0.1",
+            0,
+            dashboard_redirect_url="http://example.com/",
+        )

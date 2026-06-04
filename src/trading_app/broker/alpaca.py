@@ -264,12 +264,19 @@ def _string_value(raw: Any, name: str) -> str:
     value = _value(raw, name)
     if value is None:
         raise ValueError(f"missing broker field: {name}")
-    return str(value)
+    return _broker_string(value)
 
 
 def _optional_string_value(raw: Any, name: str) -> str | None:
     value = _value(raw, name)
-    return None if value is None else str(value)
+    return None if value is None else _broker_string(value)
+
+
+def _broker_string(value: Any) -> str:
+    enum_value = getattr(value, "value", None)
+    if enum_value is not None:
+        return str(enum_value)
+    return str(value)
 
 
 def _decimal_value(raw: Any, name: str) -> Decimal:

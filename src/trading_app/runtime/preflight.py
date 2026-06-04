@@ -283,8 +283,68 @@ class AlpacaPaperRuntimePreflight:
         )
 
     def _schedule_check(self, checked_at: datetime) -> RuntimePreflightCheck:
+        from trading_app.runtime.paper import StrategySchedule
+
+        schedule = StrategySchedule(self.config.strategy_schedule)
         trade_time = self.config.trade_after_close_time
         learning_time = self.config.nightly_learning_time
+        if schedule == StrategySchedule.MARKET_OPEN:
+            market_open_time = self.config.market_open_time
+            if market_open_time < dt_time(hour=9, minute=30) or (
+                market_open_time >= dt_time(hour=16)
+            ):
+                return _check(
+                    "runtime_schedule",
+                    RuntimePreflightStatus.FAILED,
+                    "Market-open paper schedule is outside regular market hours.",
+                    (
+                        "Keep market-open paper authority at or after 09:30 "
+                        "and before 16:00 ET."
+                    ),
+                    checked_at,
+                    (
+                        f"strategy_schedule={schedule.value}",
+                        f"market_open_time={market_open_time.isoformat()}",
+                    ),
+                )
+            if trade_time < dt_time(hour=16):
+                return _check(
+                    "runtime_schedule",
+                    RuntimePreflightStatus.FAILED,
+                    "Daily report schedule is before the regular close.",
+                    "Keep daily reporting after the regular close.",
+                    checked_at,
+                    (
+                        f"strategy_schedule={schedule.value}",
+                        f"trade_after_close_time={trade_time.isoformat()}",
+                    ),
+                )
+            if learning_time <= trade_time:
+                return _check(
+                    "runtime_schedule",
+                    RuntimePreflightStatus.FAILED,
+                    "Nightly learning is scheduled before or at daily report time.",
+                    "Schedule learning after reports and after the close.",
+                    checked_at,
+                    (
+                        f"strategy_schedule={schedule.value}",
+                        f"trade_after_close_time={trade_time.isoformat()}",
+                        f"nightly_learning_time={learning_time.isoformat()}",
+                    ),
+                )
+            return _check(
+                "runtime_schedule",
+                RuntimePreflightStatus.PASSED,
+                "Paper trading schedule is explicit market-open authority.",
+                "Keep live trading disabled and preserve manual promotion gates.",
+                checked_at,
+                (
+                    f"strategy_schedule={schedule.value}",
+                    f"market_open_time={market_open_time.isoformat()}",
+                    f"trade_after_close_time={trade_time.isoformat()}",
+                    f"nightly_learning_time={learning_time.isoformat()}",
+                ),
+            )
         if trade_time < dt_time(hour=16):
             return _check(
                 "runtime_schedule",
@@ -316,6 +376,7 @@ class AlpacaPaperRuntimePreflight:
             "Keep intraday monitoring separate from trading authority.",
             checked_at,
             (
+                f"strategy_schedule={schedule.value}",
                 f"trade_after_close_time={trade_time.isoformat()}",
                 f"nightly_learning_time={learning_time.isoformat()}",
             ),
@@ -340,25 +401,61 @@ def render_preflight_text(report: RuntimePreflightReport) -> str:
 def main(argv: list[str] | None = None) -> int:
     """Run an offline preflight check for Alpaca paper runtime."""
 
-    from trading_app.runtime.paper import AlwaysOnPaperRuntimeConfig
+    from trading_app.runtime.paper import (
+        AlwaysOnPaperRuntimeConfig,
+        StrategySchedule,
+        default_symbols_for_paper_model,
+    )
 
     parser = argparse.ArgumentParser(description="Preflight Alpaca paper runtime.")
     parser.add_argument("--symbols", default="")
     parser.add_argument("--feed", default=DataFeed.IEX.value)
     parser.add_argument("--output-dir", default="data/runtime")
+    parser.add_argument(
+        "--active-model-key",
+        default=AlwaysOnPaperRuntimeConfig().active_model_key,
+    )
+    parser.add_argument(
+        "--shadow-challenger-model-key",
+        default=AlwaysOnPaperRuntimeConfig().shadow_challenger_model_key,
+    )
+    parser.add_argument(
+        "--shadow-challenger-model-keys",
+        default="",
+        help="Optional comma-separated shadow-only challenger model keys.",
+    )
+    parser.add_argument(
+        "--strategy-schedule",
+        default=AlwaysOnPaperRuntimeConfig().strategy_schedule.value,
+        choices=[schedule.value for schedule in StrategySchedule],
+    )
     parser.add_argument("--dashboard-host", default="127.0.0.1")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--no-credential-required", action="store_true")
     args = parser.parse_args(argv)
+    shadow_challenger_model_keys = _parse_model_key_list(
+        args.shadow_challenger_model_keys
+    )
 
     symbols = parse_symbol_list(
         args.symbols,
-        default=AlwaysOnPaperRuntimeConfig().symbols,
+        default=default_symbols_for_paper_model(
+            args.active_model_key,
+            shadow_challenger_model_key=args.shadow_challenger_model_key,
+            shadow_challenger_model_keys=shadow_challenger_model_keys,
+            leaderboard_path=Path(args.output_dir)
+            / "learning"
+            / "learning-leaderboard.json",
+        ),
     )
     config = AlwaysOnPaperRuntimeConfig(
         symbols=symbols,
         feed=DataFeed(args.feed.upper()),
         output_dir=Path(args.output_dir),
+        active_model_key=args.active_model_key,
+        shadow_challenger_model_key=args.shadow_challenger_model_key,
+        shadow_challenger_model_keys=shadow_challenger_model_keys,
+        strategy_schedule=StrategySchedule(args.strategy_schedule),
     )
     report = AlpacaPaperRuntimePreflight(
         config=config,
@@ -367,6 +464,10 @@ def main(argv: list[str] | None = None) -> int:
     ).run()
     print(report.model_dump_json() if args.json else render_preflight_text(report))
     return 0 if report.can_start else 1
+
+
+def _parse_model_key_list(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _check(

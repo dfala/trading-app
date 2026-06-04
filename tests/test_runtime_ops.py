@@ -155,6 +155,10 @@ def test_supervisor_templates_are_paper_only_and_secret_safe(tmp_path) -> None:
     assert "--monitor-only-dry-run-first" in systemd
     assert "127.0.0.1" in launchd
     assert "127.0.0.1" in systemd
+    assert "<key>KeepAlive</key>" in launchd
+    assert "<false/>" in launchd
+    assert "launchd.out.log" in launchd
+    assert "launchd.err.log" in launchd
     assert ".env.paper" in launchd
     assert ".env.paper" in systemd
     assert "ALPACA_SECRET_KEY=" not in launchd

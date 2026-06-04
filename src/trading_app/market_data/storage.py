@@ -37,7 +37,7 @@ class ParquetBarStore:
         for (feed, timeframe, symbol), group in grouped.items():
             path = self._bar_file(feed=feed, timeframe=timeframe, symbol=symbol)
             path.parent.mkdir(parents=True, exist_ok=True)
-            records = [_bar_to_record(bar) for bar in sorted(group, key=_bar_sort_key)]
+            records = _merged_bar_records(path, group)
             table = pa.Table.from_pylist(records)
             pq.write_table(table, path)
 
@@ -134,6 +134,33 @@ def _bar_to_record(bar: DailyBar) -> dict[str, str]:
         "timeframe": bar.timeframe.value,
         "adjustment": bar.adjustment.value,
     }
+
+
+def _merged_bar_records(path: Path, new_bars: list[DailyBar]) -> list[dict[str, str]]:
+    by_key: dict[tuple[str, str, str, str], dict[str, str]] = {}
+    if path.exists():
+        existing_bars = _bars_from_dataframe(pq.ParquetFile(path).read().to_pandas())
+        for bar in existing_bars:
+            record = _bar_to_record(bar)
+            by_key[_record_key(record)] = record
+
+    for bar in sorted(new_bars, key=_bar_sort_key):
+        record = _bar_to_record(bar)
+        by_key[_record_key(record)] = record
+
+    return sorted(
+        by_key.values(),
+        key=lambda record: (record["trading_date"], record["symbol"]),
+    )
+
+
+def _record_key(record: dict[str, str]) -> tuple[str, str, str, str]:
+    return (
+        record["symbol"],
+        record["trading_date"],
+        record["data_feed"],
+        record["timeframe"],
+    )
 
 
 def _bars_from_dataframe(dataframe: pd.DataFrame) -> tuple[DailyBar, ...]:

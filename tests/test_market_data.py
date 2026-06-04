@@ -108,6 +108,42 @@ def test_parquet_store_and_duckdb_query_round_trip(tmp_path) -> None:
     assert [bar.symbol for bar in duckdb_bars] == ["XLK", "XLK", "XLK"]
 
 
+def test_parquet_store_merges_new_bars_without_erasing_history(tmp_path) -> None:
+    store = ParquetBarStore(tmp_path)
+    early_bars = FixtureHistoricalBarFetcher().fetch_daily_bars(
+        symbols=["SPY"],
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 5),
+        feed=DataFeed.IEX,
+    )
+    later_bars = FixtureHistoricalBarFetcher().fetch_daily_bars(
+        symbols=["SPY"],
+        start=date(2024, 1, 8),
+        end=date(2024, 1, 10),
+        feed=DataFeed.IEX,
+    )
+
+    store.write_bars(early_bars)
+    store.write_bars(later_bars)
+    read_back = store.read_bars(
+        symbols=["SPY"],
+        start=date(2024, 1, 1),
+        end=date(2024, 1, 10),
+        feed=DataFeed.IEX,
+    )
+
+    assert [bar.trading_date for bar in read_back] == [
+        date(2024, 1, 1),
+        date(2024, 1, 2),
+        date(2024, 1, 3),
+        date(2024, 1, 4),
+        date(2024, 1, 5),
+        date(2024, 1, 8),
+        date(2024, 1, 9),
+        date(2024, 1, 10),
+    ]
+
+
 def test_duckdb_query_empty_range_and_missing_symbol_returns_empty(tmp_path) -> None:
     bars = FixtureHistoricalBarFetcher().fetch_daily_bars(
         symbols=["SPY"],

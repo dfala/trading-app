@@ -19,6 +19,7 @@ from trading_app.schemas import TradingModel
 
 class ModelEvidenceType(StrEnum):
     BACKTEST = "backtest"
+    HISTORICAL_REPLAY = "historical_replay"
     WALK_FORWARD = "walk_forward"
     SHADOW = "shadow"
     PAPER = "paper"

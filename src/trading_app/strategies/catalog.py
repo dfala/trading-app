@@ -25,6 +25,9 @@ SECTOR_ETF_UNIVERSE = (
 
 
 class StrategyFamily(StrEnum):
+    STATIC_ALLOCATION = "static_allocation"
+    RISK_MANAGED_SEMICONDUCTOR = "risk_managed_semiconductor"
+    MARKET_DRAWDOWN_CIRCUIT_BREAKER = "market_drawdown_circuit_breaker"
     MOMENTUM = "momentum"
     TREND_FOLLOWING = "trend_following"
     MEAN_REVERSION = "mean_reversion"
@@ -44,6 +47,7 @@ class StrategyImplementationStatus(StrEnum):
 
 
 class StrategyCadence(StrEnum):
+    DAILY_OPEN = "daily_open"
     DAILY_CLOSE = "daily_close"
     WEEKLY_CLOSE = "weekly_close"
     MONTHLY = "monthly"
@@ -211,6 +215,314 @@ def monthly_sector_momentum_definition(
             "lookback_days": lookback_days,
             "top_n": top_n,
             "universe": universe,
+        },
+    )
+
+
+def static_etf_allocation_definition(
+    *,
+    version: str = "0.1.0",
+    weights: dict[str, str] | None = None,
+    benchmark: str = "SPY",
+    authority: StrategyAuthority = StrategyAuthority.RESEARCH_ONLY,
+) -> StrategyDefinition:
+    resolved_weights = weights or {"QQQ": "1"}
+    universe = tuple(resolved_weights)
+    return StrategyDefinition(
+        strategy_id="static_etf_allocation",
+        version=version,
+        name="Static ETF Allocation",
+        family=StrategyFamily.STATIC_ALLOCATION,
+        implementation_status=StrategyImplementationStatus.IMPLEMENTED,
+        authority=authority,
+        hypothesis=(
+            "Some simple low-turnover U.S. ETF allocations may outperform SPY "
+            "more consistently than frequently rotating models, but they carry "
+            "concentration and regime risk."
+        ),
+        universe=universe,
+        benchmark=benchmark,
+        data_requirements=(
+            "Adjusted daily OHLCV bars for every ETF in the allocation.",
+            f"Adjusted daily {benchmark} benchmark bars for comparison.",
+            "No intraday data, event data, or AI signal is required.",
+        ),
+        feature_names=("fixed_weight", "rebalance_drift"),
+        trading_cadence=StrategyCadence.MONTHLY,
+        holding_period="Long-term static allocation with periodic rebalance checks.",
+        signal_logic=(
+            "Use only completed bars before execution to confirm each ETF has "
+            "tradable history, then maintain the configured fixed weights."
+        ),
+        sizing_logic=(
+            "Normalize configured positive ETF weights so the allocation sums to "
+            "100% invested exposure."
+        ),
+        exit_logic=(
+            "Sell overweight holdings and buy underweight holdings to return to "
+            "the configured static weights."
+        ),
+        risk_assumptions=(
+            "Long-only U.S.-listed ETF exposure.",
+            "No margin, no shorts, no options, no intraday authority.",
+            "Low turnover reduces trading friction but does not reduce market risk.",
+        ),
+        failure_modes=(
+            "Persistent sector concentration can underperform after leadership "
+            "changes.",
+            "Historical ETF winners may be survivorship-biased research choices.",
+            "Static exposure can suffer large drawdowns without a defensive exit.",
+            "Outperformance versus SPY may be compensation for higher factor risk.",
+        ),
+        constraints=(
+            "Research-only by default.",
+            "U.S.-listed stocks and ETFs only.",
+            "Must pass forward paper evidence and manual approval before promotion.",
+        ),
+        ai_role=(
+            "Explain concentration, drawdown, and regime risks.",
+            "Compare static allocation baselines against active rotation models.",
+            "Flag cases where simple exposure beats complex model turnover.",
+        ),
+        parameters={
+            "weights": resolved_weights,
+            "universe": universe,
+            "benchmark": benchmark,
+        },
+    )
+
+
+def risk_managed_semiconductor_definition(
+    *,
+    version: str = "0.1.0",
+    sleeve_weights: dict[str, str] | None = None,
+    risk_off_weights: dict[str, str] | None = None,
+    benchmark: str = "SPY",
+    trend_window_days: int | None = 200,
+    relative_momentum_days: int | None = None,
+    relative_momentum_symbols: tuple[str, ...] = (),
+    volatility_window_days: int | None = None,
+    target_volatility: str | None = None,
+    volatility_exposure_bands: tuple[tuple[str, str], ...] = (),
+    drawdown_limit: str | None = None,
+    drawdown_exposure_bands: tuple[tuple[str, str], ...] = (),
+    authority: StrategyAuthority = StrategyAuthority.RESEARCH_ONLY,
+) -> StrategyDefinition:
+    resolved_sleeve = sleeve_weights or {"SOXX": "1"}
+    resolved_risk_off = risk_off_weights or {}
+    normalized_benchmark = validate_symbol(benchmark)
+    universe = tuple(
+        dict.fromkeys(
+            symbol
+            for symbol in (
+                *resolved_sleeve,
+                *resolved_risk_off,
+                *relative_momentum_symbols,
+            )
+            if validate_symbol(symbol) != normalized_benchmark
+        )
+    )
+    return StrategyDefinition(
+        strategy_id="risk_managed_semiconductor",
+        version=version,
+        name="Risk-Managed Semiconductor Alpha Sleeve",
+        family=StrategyFamily.RISK_MANAGED_SEMICONDUCTOR,
+        implementation_status=StrategyImplementationStatus.IMPLEMENTED,
+        authority=authority,
+        hypothesis=(
+            "Concentrated semiconductor ETF exposure may retain meaningful excess "
+            "return while reducing drawdowns when simple point-in-time risk "
+            "overlays control trend, relative momentum, volatility, and drawdown."
+        ),
+        universe=universe,
+        benchmark=normalized_benchmark,
+        data_requirements=(
+            "Adjusted daily OHLCV bars for SOXX, SMH, and every configured "
+            "risk-off or comparator ETF.",
+            f"Adjusted daily {normalized_benchmark} benchmark bars for comparison "
+            "and optional risk-off rotation.",
+            "No intraday, options, news, or AI-generated signal is required.",
+        ),
+        feature_names=(
+            "sleeve_index",
+            "moving_average_filter",
+            "relative_momentum_filter",
+            "realized_volatility",
+            "sleeve_drawdown",
+        ),
+        trading_cadence=StrategyCadence.MONTHLY,
+        holding_period="Monthly alpha-sleeve allocation with risk-off fallback.",
+        signal_logic=(
+            "Use only completed bars before the execution date to build a "
+            "weighted semiconductor sleeve index. Risk-on exposure is allowed "
+            "only when the configured trend, relative momentum, volatility, and "
+            "drawdown gates pass."
+        ),
+        sizing_logic=(
+            "Allocate the risk-on fraction to the configured semiconductor sleeve. "
+            "If volatility targeting is enabled, scale the sleeve by target "
+            "volatility divided by realized volatility, capped at 100%. Allocate "
+            "the remainder to the configured risk-off weights or cash."
+        ),
+        exit_logic=(
+            "Reduce or exit semiconductor exposure when any active gate fails; "
+            "re-enter only when the same point-in-time gates recover."
+        ),
+        risk_assumptions=(
+            "Long-only U.S.-listed ETF exposure.",
+            "No leverage, no shorts, no margin, no options, no intraday authority.",
+            "Risk-off can be cash, benchmark ETF exposure, or broad ETF exposure.",
+            "The model is judged against SPY, QQQ, XLK, static SOXX, static SMH, "
+            "and the static semiconductor basket.",
+        ),
+        failure_modes=(
+            "Risk overlays can reduce return without materially reducing drawdown.",
+            "Moving-average and drawdown gates can whipsaw during sharp recoveries.",
+            "Parameter choices can overfit the 2023-forward semiconductor boom.",
+            "Benchmark rotation can still leave the portfolio exposed to broad "
+            "market drawdowns.",
+            "Historical semiconductor leadership can reverse for long periods.",
+        ),
+        constraints=(
+            "Research-only by default.",
+            "U.S.-listed stocks and ETFs only.",
+            "No live-money authority without forward paper evidence, manual "
+            "approval, position limits, and kill switches.",
+        ),
+        ai_role=(
+            "Explain why the sleeve is risk-on, scaled, or risk-off.",
+            "Compare overlay variants against static semiconductor baselines.",
+            "Flag parameter fragility and regime concentration.",
+        ),
+        parameters={
+            "sleeve_weights": resolved_sleeve,
+            "risk_off_weights": resolved_risk_off,
+            "benchmark": normalized_benchmark,
+            "trend_window_days": trend_window_days,
+            "relative_momentum_days": relative_momentum_days,
+            "relative_momentum_symbols": relative_momentum_symbols,
+            "volatility_window_days": volatility_window_days,
+            "target_volatility": target_volatility,
+            "volatility_exposure_bands": volatility_exposure_bands,
+            "drawdown_limit": drawdown_limit,
+            "drawdown_exposure_bands": drawdown_exposure_bands,
+        },
+    )
+
+
+def market_drawdown_circuit_breaker_definition(
+    *,
+    version: str = "0.1.0",
+    risk_symbols: tuple[str, ...] = ("SOXX", "SMH"),
+    risk_off_weights: dict[str, str] | None = None,
+    benchmark: str = "SPY",
+    momentum_lookback_days: int = 126,
+    drawdown_symbols: tuple[str, ...] = ("SPY", "QQQ"),
+    drawdown_lookback_days: int = 252,
+    drawdown_threshold: str | None = "0.12",
+    triggered_risk_exposure: str = "0",
+    trigger_mode: str = "any",
+    authority: StrategyAuthority = StrategyAuthority.RESEARCH_ONLY,
+) -> StrategyDefinition:
+    resolved_risk_off = risk_off_weights or {}
+    normalized_benchmark = validate_symbol(benchmark)
+    normalized_risk_symbols = tuple(validate_symbol(symbol) for symbol in risk_symbols)
+    normalized_drawdown_symbols = tuple(
+        validate_symbol(symbol) for symbol in drawdown_symbols
+    )
+    universe = tuple(
+        dict.fromkeys(
+            symbol
+            for symbol in (
+                *normalized_risk_symbols,
+                *normalized_drawdown_symbols,
+                *resolved_risk_off,
+            )
+            if validate_symbol(symbol) != normalized_benchmark
+        )
+    )
+    return StrategyDefinition(
+        strategy_id="market_drawdown_circuit_breaker",
+        version=version,
+        name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
+        family=StrategyFamily.MARKET_DRAWDOWN_CIRCUIT_BREAKER,
+        implementation_status=StrategyImplementationStatus.IMPLEMENTED,
+        authority=authority,
+        hypothesis=(
+            "A semiconductor momentum sleeve may retain strong historical excess "
+            "return while avoiding the deepest broad-market drawdowns when SPY "
+            "or QQQ breaches a predeclared rolling drawdown threshold."
+        ),
+        universe=universe,
+        benchmark=normalized_benchmark,
+        data_requirements=(
+            "Adjusted daily OHLCV bars for configured semiconductor risk symbols.",
+            "Adjusted daily OHLCV bars for configured drawdown monitor symbols.",
+            "Adjusted daily bars for any configured risk-off ETF.",
+            f"Adjusted daily {normalized_benchmark} benchmark bars.",
+        ),
+        feature_names=(
+            "semiconductor_relative_strength",
+            "rolling_market_drawdown",
+            "drawdown_breaker_state",
+            "risk_exposure",
+        ),
+        trading_cadence=StrategyCadence.DAILY_OPEN,
+        holding_period=(
+            "Daily market-open semiconductor sleeve using only prior completed bars."
+        ),
+        signal_logic=(
+            "Use only completed bars before the decision date. Select the "
+            "strongest configured semiconductor ETF by trailing return, then "
+            "monitor configured broad-market symbols against their rolling highs."
+        ),
+        sizing_logic=(
+            "Allocate 100% to the selected semiconductor ETF while the breaker "
+            "is clear. When the breaker triggers, reduce semiconductor exposure "
+            f"to {triggered_risk_exposure} and allocate the remainder to the "
+            "configured risk-off weights or cash."
+        ),
+        exit_logic=(
+            "De-risk when the configured drawdown trigger mode is satisfied; "
+            "re-enter at the next daily decision when broad-market drawdowns "
+            "recover above the threshold."
+        ),
+        risk_assumptions=(
+            "Long-only U.S.-listed ETF exposure.",
+            "No leverage, no shorts, no margin, no options, no intraday authority.",
+            "Cash fallback is modeled as uninvested cash unless risk-off weights "
+            "are explicitly configured.",
+            "The model must be compared against SPY, QQQ, XLK, SOXX, SMH, and "
+            "a semiconductor basket before any paper-tracking promotion.",
+        ),
+        failure_modes=(
+            "A drawdown threshold can be overfit to 2020 and 2022 crash paths.",
+            "Monthly decisions can de-risk too late after fast gap-downs.",
+            "Cash fallback can miss V-shaped recoveries.",
+            "QQQ and SPY drawdowns may fail to detect semiconductor-specific stress.",
+            "Historical semiconductor leadership can reverse for extended periods.",
+        ),
+        constraints=(
+            "Research-only by default.",
+            "U.S.-listed stocks and ETFs only.",
+            "No live-money authority without shared-harness replay, paper evidence, "
+            "manual approval, position limits, and kill switches.",
+        ),
+        ai_role=(
+            "Audit whether the breaker triggered from point-in-time data.",
+            "Compare threshold sensitivity against predeclared gates.",
+            "Flag parameter fragility and crash-regime concentration.",
+        ),
+        parameters={
+            "risk_symbols": normalized_risk_symbols,
+            "risk_off_weights": resolved_risk_off,
+            "benchmark": normalized_benchmark,
+            "momentum_lookback_days": momentum_lookback_days,
+            "drawdown_symbols": normalized_drawdown_symbols,
+            "drawdown_lookback_days": drawdown_lookback_days,
+            "drawdown_threshold": drawdown_threshold,
+            "triggered_risk_exposure": triggered_risk_exposure,
+            "trigger_mode": trigger_mode,
         },
     )
 
@@ -731,6 +1043,24 @@ def build_default_strategy_catalog() -> StrategyCatalog:
     return StrategyCatalog(
         (
             monthly_sector_momentum_definition(),
+            static_etf_allocation_definition(),
+            risk_managed_semiconductor_definition(
+                version="trend-200d-soxx-cash",
+                sleeve_weights={"SOXX": "1"},
+                risk_off_weights={},
+                trend_window_days=200,
+            ),
+            market_drawdown_circuit_breaker_definition(
+                version="top-semi-l126-any12-cash",
+                risk_symbols=("SOXX", "SMH"),
+                risk_off_weights={},
+                momentum_lookback_days=126,
+                drawdown_symbols=("SPY", "QQQ"),
+                drawdown_lookback_days=252,
+                drawdown_threshold="0.12",
+                triggered_risk_exposure="0",
+                trigger_mode="any",
+            ),
             trend_following_etf_definition(),
             mean_reversion_etf_definition(),
             volatility_aware_etf_definition(),

@@ -1,0 +1,93 @@
+{
+  "hypothesis": "Hypothesis 2 - Market Drawdown Circuit Breaker",
+  "verdict": "pass_for_research_continuation_not_live_trading",
+  "data": {
+    "path": "data/market_data/bars/feed=SIP/timeframe=1D/symbol=*/bars.parquet",
+    "start": "2016-01-04",
+    "end": "2026-05-29",
+    "symbols": ["SPY", "QQQ", "XLK", "SOXX", "SMH", "TLT", "GLD"],
+    "required_symbols_available": ["SPY", "QQQ", "XLK", "SOXX", "SMH"],
+    "bil_available": false,
+    "bars_per_symbol": 2616,
+    "adjustment": "ALL"
+  },
+  "method": {
+    "rebalance": "monthly on first trading day close",
+    "signal_lag": "signals use bars strictly before decision date; new weights active on next daily close-to-close return",
+    "momentum_lookback_days": 126,
+    "drawdown_lookback_days": 252,
+    "cash_return": 0.0,
+    "costs_bps": [5, 25],
+    "variant_count": 290,
+    "cost_model": "turnover cost on absolute tradable ETF weight changes, including initial allocation"
+  },
+  "baselines": {
+    "SPY": {"total_return": 3.4099335432, "cagr": 0.1533852913, "vol": 0.1758356884, "sharpe": 0.9013228705, "max_drawdown": -0.3379479881},
+    "QQQ": {"total_return": 6.2818818424, "cagr": 0.2103783274, "vol": 0.2218412522, "sharpe": 0.9735843983, "max_drawdown": -0.3500407914},
+    "XLK": {"total_return": 9.0748945148, "cagr": 0.2487648703, "vol": 0.2433242719, "sharpe": 1.0367498041, "max_drawdown": -0.3355948064},
+    "SOXX": {"total_return": 20.3138576779, "cagr": 0.3420730334, "vol": 0.3306243186, "sharpe": 1.0572804028, "max_drawdown": -0.4575503356},
+    "SMH": {"total_return": 23.9450229071, "cagr": 0.3625316403, "vol": 0.3224939181, "sharpe": 1.1228171664, "max_drawdown": -0.4530440415},
+    "SEMI_50_50_BH": {"total_return": 22.1294402925, "cagr": 0.3526655994, "vol": 0.32540184, "sharpe": 1.0932615684, "max_drawdown": -0.4553428401}
+  },
+  "recommended": {
+    "label": "top_semi_l126 / either dd>12 risk 0% + cash",
+    "sleeve": "top_semi_l126",
+    "drawdown_source": "either_spy_or_qqq",
+    "threshold": 0.12,
+    "risk_on_exposure_when_triggered": 0.0,
+    "risk_off": "cash",
+    "base_5_bps": {
+      "total_return": 21.0085754641,
+      "delta_vs_spy": 17.5986419209,
+      "soxx_capture_vs_spy": 1.0410980185,
+      "cagr": 0.3462191757,
+      "vol": 0.265123887,
+      "sharpe": 1.2567796618,
+      "max_drawdown": -0.2973191586,
+      "trigger_months": 18,
+      "trade_months": 23,
+      "total_cost_drag": 0.017,
+      "folds": {
+        "2016-2018": {"return": 0.7933982085, "delta_vs_spy": 0.4859480511},
+        "2019-2022": {"return": 1.2934442443, "delta_vs_spy": 0.6588803064},
+        "2023-2026-05-29": {"return": 4.3509022213, "delta_vs_spy": 3.2873997663}
+      }
+    },
+    "stress_25_bps": {
+      "total_return": 19.5628568724,
+      "delta_vs_spy": 16.1529233292,
+      "soxx_capture_vs_spy": 0.9555723985,
+      "cagr": 0.3374512786,
+      "vol": 0.2651308936,
+      "sharpe": 1.2320399406,
+      "max_drawdown": -0.3001060447,
+      "trigger_months": 18,
+      "trade_months": 23,
+      "total_cost_drag": 0.085,
+      "folds": {
+        "2016-2018": {"return": 0.7648064834, "delta_vs_spy": 0.457356326},
+        "2019-2022": {"return": 1.1995201112, "delta_vs_spy": 0.5649561733},
+        "2023-2026-05-29": {"return": 4.2973470325, "delta_vs_spy": 3.2338445775}
+      }
+    }
+  },
+  "selected_variants_5_bps": [
+    {"label": "top_semi_l126 / no breaker", "total_return": 25.8536931466, "delta_vs_spy": 22.4437596034, "soxx_capture_vs_spy": 1.3277248185, "max_drawdown": -0.4623556815},
+    {"label": "rel_semis_l126_vs_spy_qqq / no breaker", "total_return": 24.049501346, "delta_vs_spy": 20.6395678028, "soxx_capture_vs_spy": 1.2209926901, "max_drawdown": -0.3526111369},
+    {"label": "top_semi_l126 / either dd>8 risk 0% + cash", "total_return": 9.1660276956, "delta_vs_spy": 5.7560941524, "soxx_capture_vs_spy": 0.3405182197, "max_drawdown": -0.2481730907},
+    {"label": "top_semi_l126 / either dd>8 risk 50% + cash", "total_return": 16.539142279, "delta_vs_spy": 13.1292087358, "soxx_capture_vs_spy": 0.7766959098, "max_drawdown": -0.3046462613},
+    {"label": "top_semi_l126 / either dd>12 risk 0% + cash", "total_return": 21.0085754641, "delta_vs_spy": 17.5986419209, "soxx_capture_vs_spy": 1.0410980185, "max_drawdown": -0.2973191586},
+    {"label": "top_semi_l126 / QQQ dd>12 risk 0% + cash", "total_return": 23.296997994, "delta_vs_spy": 19.8870644508, "soxx_capture_vs_spy": 1.1764762012, "max_drawdown": -0.2973191586},
+    {"label": "top_semi_l126 / either dd>15 risk 0% + cash", "total_return": 18.2143573168, "delta_vs_spy": 14.8044237736, "soxx_capture_vs_spy": 0.8757980488, "max_drawdown": -0.3573936094},
+    {"label": "rel_semis_l126_vs_spy_qqq / either dd>12 risk 50% + cash", "total_return": 21.6688771559, "delta_vs_spy": 18.2589436127, "soxx_capture_vs_spy": 1.0801600544, "max_drawdown": -0.3069111168}
+  ],
+  "gates": {
+    "full_period_delta_vs_spy_gt_800pp": "pass",
+    "soxx_outperformance_capture_gte_0_70": "pass",
+    "max_drawdown_target_shallower_than_35pct": "pass",
+    "max_drawdown_ideal_shallower_than_30pct": "pass_base_near_line_under_stress",
+    "positive_delta_vs_spy_every_fold": "pass",
+    "positive_under_25bps_stress": "pass",
+    "not_single_parameter": "mostly_pass"
+  }
+}

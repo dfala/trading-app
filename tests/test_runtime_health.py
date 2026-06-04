@@ -120,6 +120,10 @@ def test_health_engine_marks_stale_prices_degraded(tmp_path) -> None:
 
     assert report is not None
     assert report.status == RuntimeHealthStatus.DEGRADED
+    market_data_check = next(
+        check for check in report.checks if check.name == "market_data"
+    )
+    assert "stale_symbols=AAA,BBB,SPY" in market_data_check.evidence
     assert RuntimeAlertCode.MARKET_DATA_STALE in {
         alert.code for alert in runtime.snapshot(as_of=AFTER_CLOSE).alerts
     }

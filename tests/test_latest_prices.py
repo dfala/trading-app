@@ -61,6 +61,12 @@ def test_latest_price_snapshot_marks_missing_and_stale_symbols() -> None:
 
     assert snapshot.status == LatestPriceStatus.MISSING
     assert snapshot.missing_symbols == ("XLK",)
+    assert snapshot.stale_symbols == ("SPY",)
+    assert snapshot.freshness_evidence == (
+        "missing",
+        "stale_symbols=SPY",
+        "missing_symbols=XLK",
+    )
     assert snapshot.prices[0].status == LatestPriceStatus.STALE
     assert not snapshot.all_fresh
 

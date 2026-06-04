@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import replace
 from datetime import UTC, datetime
 from datetime import time as dt_time
@@ -12,10 +13,16 @@ from trading_app.runtime import (
     AlwaysOnPaperRuntimeConfig,
     RuntimePersistenceStore,
     RuntimePreflightStatus,
+    StrategySchedule,
     render_preflight_text,
 )
 from trading_app.runtime.preflight import main as preflight_main
-from trading_app.runtime.run_alpaca_paper import main as runtime_main
+from trading_app.runtime.run_alpaca_paper import (
+    create_dashboard_server_with_port_fallback,
+)
+from trading_app.runtime.run_alpaca_paper import (
+    main as runtime_main,
+)
 from trading_app.schemas import DataFeed
 
 NOW = datetime(2026, 5, 29, 20, 10, tzinfo=UTC)
@@ -127,6 +134,50 @@ def test_preflight_fails_live_flag_invalid_symbol_public_dashboard_and_schedule(
         failed_names
     )
     assert "runtime_schedule" in failed_names
+
+
+def test_preflight_allows_explicit_market_open_paper_schedule(tmp_path) -> None:
+    config = make_config(
+        tmp_path,
+        symbols=("SOXX", "SMH", "SPY", "QQQ"),
+        active_model_key=(
+            "market_drawdown_circuit_breaker:top-semi-l126-qqq-dd08-risk0-cash"
+        ),
+        strategy_schedule=StrategySchedule.MARKET_OPEN,
+    )
+
+    report = AlpacaPaperRuntimePreflight(
+        config=config,
+        env=VALID_ENV,
+    ).run(as_of=NOW)
+    schedule_check = next(
+        check for check in report.checks if check.name == "runtime_schedule"
+    )
+
+    assert report.can_start
+    assert schedule_check.status == RuntimePreflightStatus.PASSED
+    assert "strategy_schedule=market_open" in schedule_check.evidence
+
+
+def test_preflight_rejects_market_open_schedule_outside_regular_hours(
+    tmp_path,
+) -> None:
+    config = make_config(
+        tmp_path,
+        strategy_schedule=StrategySchedule.MARKET_OPEN,
+        market_open_time=dt_time(hour=8),
+    )
+
+    report = AlpacaPaperRuntimePreflight(
+        config=config,
+        env=VALID_ENV,
+    ).run(as_of=NOW)
+    schedule_check = next(
+        check for check in report.checks if check.name == "runtime_schedule"
+    )
+
+    assert not report.can_start
+    assert schedule_check.status == RuntimePreflightStatus.FAILED
 
 
 def test_preflight_fails_live_alpaca_endpoint_override(tmp_path) -> None:
@@ -350,3 +401,26 @@ def test_runtime_cli_requires_monitor_only_dry_run_before_startup(
         )
 
     assert "--monitor-only-dry-run-first" in str(error.value)
+
+
+def test_dashboard_server_auto_increments_when_preferred_port_is_busy() -> None:
+    busy_socket = socket.socket()
+    busy_socket.bind(("127.0.0.1", 0))
+    busy_socket.listen()
+    busy_port = busy_socket.getsockname()[1]
+
+    server = None
+    try:
+        server, resolved_port = create_dashboard_server_with_port_fallback(
+            host="127.0.0.1",
+            preferred_port=busy_port,
+            snapshot_provider=None,
+            control_handler=None,
+            health_provider=None,
+            auto_increment=True,
+        )
+        assert resolved_port != busy_port
+    finally:
+        if server is not None:
+            server.server_close()
+        busy_socket.close()

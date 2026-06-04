@@ -8,8 +8,10 @@ from trading_app.strategies import (
     BenchmarkRelativeStrengthETFStrategy,
     CashRotationETFStrategy,
     DefensiveRegimeSwitchETFStrategy,
+    MarketDrawdownCircuitBreakerStrategy,
     MeanReversionETFStrategy,
     MonthlySectorMomentumStrategy,
+    RiskManagedSemiconductorStrategy,
     StrategyAuthority,
     StrategyCadence,
     StrategyDefinition,
@@ -80,11 +82,17 @@ def test_default_strategy_catalog_covers_research_families() -> None:
         "benchmark_relative_strength_etf",
         "cash_rotation_model",
         "defensive_regime_switch",
+        "market_drawdown_circuit_breaker",
         "mean_reversion_etf",
         "monthly_sector_momentum",
+        "risk_managed_semiconductor",
+        "static_etf_allocation",
         "trend_following_etf",
         "volatility_aware_etf",
     }
+    assert StrategyFamily.STATIC_ALLOCATION in families
+    assert StrategyFamily.RISK_MANAGED_SEMICONDUCTOR in families
+    assert StrategyFamily.MARKET_DRAWDOWN_CIRCUIT_BREAKER in families
     assert StrategyFamily.MOMENTUM in families
     assert StrategyFamily.TREND_FOLLOWING in families
     assert StrategyFamily.MEAN_REVERSION in families
@@ -118,6 +126,59 @@ def test_trend_following_definition_is_complete_and_research_only() -> None:
     assert definition.parameters["top_n"] == 1
     assert any("Research-only" in item for item in definition.constraints)
     assert any("Whipsaw" in item for item in definition.failure_modes)
+
+
+def test_risk_managed_semiconductor_definition_is_complete_and_research_only() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        risk_off_weights={"SPY": Decimal("1")},
+        trend_window_days=200,
+        relative_momentum_days=126,
+        relative_momentum_symbols=("SPY", "QQQ"),
+        volatility_window_days=63,
+        target_volatility=Decimal("0.20"),
+        drawdown_limit=Decimal("-0.15"),
+    )
+
+    definition = strategy.definition()
+
+    assert definition.strategy_id == "risk_managed_semiconductor"
+    assert definition.implementation_status == StrategyImplementationStatus.IMPLEMENTED
+    assert definition.authority == StrategyAuthority.RESEARCH_ONLY
+    assert definition.family == StrategyFamily.RISK_MANAGED_SEMICONDUCTOR
+    assert definition.benchmark == "SPY"
+    assert definition.universe == ("SOXX", "QQQ")
+    assert definition.parameters["sleeve_weights"] == {"SOXX": "1"}
+    assert definition.parameters["risk_off_weights"] == {"SPY": "1"}
+    assert definition.parameters["relative_momentum_days"] == 126
+    assert any("No leverage" in item for item in definition.risk_assumptions)
+    assert any("whipsaw" in item for item in definition.failure_modes)
+
+
+def test_market_drawdown_circuit_breaker_definition_is_complete() -> None:
+    strategy = MarketDrawdownCircuitBreakerStrategy(
+        risk_symbols=("SOXX", "SMH"),
+        risk_off_weights={},
+        momentum_lookback_days=126,
+        drawdown_symbols=("SPY", "QQQ"),
+        drawdown_lookback_days=252,
+        drawdown_threshold=Decimal("0.12"),
+        triggered_risk_exposure=Decimal("0"),
+    )
+
+    definition = strategy.definition()
+
+    assert definition.strategy_id == "market_drawdown_circuit_breaker"
+    assert definition.implementation_status == StrategyImplementationStatus.IMPLEMENTED
+    assert definition.authority == StrategyAuthority.RESEARCH_ONLY
+    assert definition.family == StrategyFamily.MARKET_DRAWDOWN_CIRCUIT_BREAKER
+    assert definition.benchmark == "SPY"
+    assert definition.universe == ("SOXX", "SMH", "QQQ")
+    assert definition.parameters["risk_symbols"] == ("SOXX", "SMH")
+    assert definition.parameters["drawdown_symbols"] == ("SPY", "QQQ")
+    assert definition.parameters["drawdown_threshold"] == "0.12"
+    assert any("No leverage" in item for item in definition.risk_assumptions)
+    assert any("overfit" in item for item in definition.failure_modes)
 
 
 def test_mean_reversion_definition_is_complete_and_research_only() -> None:

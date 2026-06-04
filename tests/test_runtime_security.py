@@ -94,15 +94,15 @@ def test_secret_scanner_normalizes_quoted_env_values_before_matching(
 def test_secret_scanner_scans_extra_dashboard_or_log_paths(tmp_path) -> None:
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()
-    exported_dashboard = tmp_path / "operator-dashboard.html"
-    exported_dashboard.write_text(
+    dashboard_capture = tmp_path / "next-dashboard-capture.html"
+    dashboard_capture.write_text(
         "<html>accidental paper-key-value-123 leak</html>",
         encoding="utf-8",
     )
 
     report = RuntimeSecretScanner(
         output_dir=runtime_dir,
-        scan_paths=(exported_dashboard,),
+        scan_paths=(dashboard_capture,),
         env=ENV,
         persist_report=False,
     ).scan(as_of=NOW)
@@ -110,9 +110,9 @@ def test_secret_scanner_scans_extra_dashboard_or_log_paths(tmp_path) -> None:
 
     assert not report.passed
     assert report.files_scanned == 1
-    assert report.findings[0].path == "operator-dashboard.html"
+    assert report.findings[0].path == "next-dashboard-capture.html"
     assert report.findings[0].secret_name == "ALPACA_API_KEY"
-    assert str(exported_dashboard) in report.scan_roots
+    assert str(dashboard_capture) in report.scan_roots
     assert "paper-key-value-123" not in text
 
 

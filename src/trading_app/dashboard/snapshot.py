@@ -228,6 +228,7 @@ def build_demo_dashboard_snapshot() -> OperatorDashboardSnapshot:
         paper_report=paper_report,
         daily_report=daily_report,
         nightly_learning=nightly_learning,
+        latest_prices=latest_snapshot,
         metrics=metrics,
         model_cards=model_cards,
         session_state=PaperSessionState(
@@ -251,6 +252,11 @@ def build_demo_dashboard_snapshot() -> OperatorDashboardSnapshot:
             open_order_count=open_orders,
         ),
         model_arena=_demo_model_arena(as_of),
+        runtime_state={
+            "status": "running",
+            "active_model_key": active_key,
+            "latest_prices": latest_snapshot.model_dump(mode="json"),
+        },
         live_readiness=_demo_live_readiness(as_of),
         control_state=OperatorControlState(
             paused=False,

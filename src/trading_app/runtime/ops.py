@@ -397,11 +397,11 @@ def render_launchd_plist(
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
-  <true/>
+  <false/>
   <key>StandardOutPath</key>
-  <string>{escape(str(log_dir / "alpaca-paper.out.log"))}</string>
+  <string>{escape(str(log_dir / "launchd.out.log"))}</string>
   <key>StandardErrorPath</key>
-  <string>{escape(str(log_dir / "alpaca-paper.err.log"))}</string>
+  <string>{escape(str(log_dir / "launchd.err.log"))}</string>
 </dict>
 </plist>
 """

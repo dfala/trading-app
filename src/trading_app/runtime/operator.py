@@ -168,10 +168,6 @@ class RuntimeAlertEngine:
                 )
             )
         elif not latest_prices.all_fresh:
-            evidence = (
-                latest_prices.status.value,
-                *latest_prices.missing_symbols,
-            )
             alerts.append(
                 _alert(
                     "market-data-stale-or-missing",
@@ -180,7 +176,7 @@ class RuntimeAlertEngine:
                     RuntimeAlertCode.MARKET_DATA_STALE,
                     "Latest prices stale or missing",
                     "New paper orders are blocked until all required prices are fresh.",
-                    evidence,
+                    latest_prices.freshness_evidence,
                 )
             )
 

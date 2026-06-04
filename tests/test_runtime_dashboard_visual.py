@@ -42,6 +42,7 @@ def test_dashboard_visual_audit_passes_with_rendered_operator_surfaces(
     assert {check.name for check in report.checks}.issuperset(
         {
             "paper_boundary_visible",
+            "next_dashboard_handoff_configured",
             "critical_runtime_surfaces_present",
             "operator_controls_present",
             "alerts_and_degraded_states_visible",
@@ -55,12 +56,10 @@ def test_dashboard_visual_audit_passes_with_rendered_operator_surfaces(
     )
     assert report.markdown_path is not None
     assert Path(report.markdown_path).exists()
-    assert report.rendered_html_path is not None
-    rendered = Path(report.rendered_html_path).read_text(encoding="utf-8")
-    assert "Alpaca Paper" in rendered
-    assert "No live-money actions are available" in rendered
+    assert report.rendered_html_path is None
     assert "Dashboard visual status" in text
     assert "Dashboard Visual Readiness Audit" in markdown
+    assert "Next.js owns dashboard rendering" in text
     assert (tmp_path / "state" / "latest-dashboard-visual-report.json").exists()
     assert (tmp_path / "journal" / "dashboard-visual.jsonl").exists()
 
@@ -73,15 +72,16 @@ def test_dashboard_visual_audit_fails_when_snapshot_is_missing(tmp_path) -> None
     assert report.status == RuntimePreflightStatus.FAILED
     assert report.failed_visual_scenarios == 1
     assert by_name["dashboard_snapshot_present"].status == RuntimePreflightStatus.FAILED
-    assert report.rendered_html_path is not None
-    assert Path(report.rendered_html_path).read_text(encoding="utf-8") == ""
+    assert report.rendered_html_path is None
 
 
 def test_dashboard_visual_cli_outputs_json_and_exit_codes(tmp_path, capsys) -> None:
     success_dir = tmp_path / "success"
     failure_dir = tmp_path / "failure"
     RuntimePersistenceStore(success_dir).persist_dashboard_snapshot(
-        build_demo_dashboard_snapshot().model_copy(update={"mode": "Alpaca Paper"})
+        build_demo_dashboard_snapshot().model_copy(
+            update={"mode": "Alpaca Paper", "broker": "alpaca-paper"}
+        )
     )
 
     success = dashboard_visual_main(["--output-dir", str(success_dir), "--json"])

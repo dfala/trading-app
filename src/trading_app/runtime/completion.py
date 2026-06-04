@@ -746,7 +746,7 @@ def _dashboard_runtime_state(artifacts: _Artifacts) -> FunctionalRequirementEvid
                         *visual_gap,
                     ),
                     (
-                        "Fix rendered dashboard readiness gaps and rerun the "
+                        "Fix Next dashboard readiness gaps and rerun the "
                         "dashboard visual audit."
                     ),
                 )

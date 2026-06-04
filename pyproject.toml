@@ -12,6 +12,15 @@ dependencies = [
     "pyarrow>=22.0.0",
 ]
 
+[project.scripts]
+dev = "trading_app.runtime.dev:main"
+dashboard = "trading_app.dashboard.server:main"
+historical-replay = "trading_app.research.run_historical_replay:main"
+replay-discovery = "trading_app.research.run_replay_discovery:main"
+autonomous-learning = "trading_app.learning.autonomous_cycle:main"
+autonomous-learning-service = "trading_app.learning.autonomous_service:main"
+runtime-watchdog = "trading_app.runtime.watchdog:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",

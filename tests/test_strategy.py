@@ -9,8 +9,15 @@ from trading_app.strategies.benchmark_relative import (
 )
 from trading_app.strategies.cash_rotation import CashRotationETFStrategy
 from trading_app.strategies.defensive_regime import DefensiveRegimeSwitchETFStrategy
+from trading_app.strategies.market_drawdown_circuit_breaker import (
+    MarketDrawdownCircuitBreakerStrategy,
+)
 from trading_app.strategies.mean_reversion import MeanReversionETFStrategy
+from trading_app.strategies.risk_managed_semiconductor import (
+    RiskManagedSemiconductorStrategy,
+)
 from trading_app.strategies.sector_momentum import MonthlySectorMomentumStrategy
+from trading_app.strategies.static_allocation import StaticETFAllocationStrategy
 from trading_app.strategies.trend_following import TrendFollowingETFStrategy
 from trading_app.strategies.volatility_aware import VolatilityAwareETFStrategy
 
@@ -31,6 +38,277 @@ def make_bar(symbol: str, trading_date: date, close: str) -> DailyBar:
         source="test",
         data_feed=DataFeed.IEX,
     )
+
+
+def test_static_allocation_returns_normalized_weights_after_prior_history() -> None:
+    strategy = StaticETFAllocationStrategy(
+        weights={"QQQ": Decimal("2"), "XLK": Decimal("1")},
+    )
+    bars = [
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("XLK", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "1000"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 2))
+
+    assert targets == {
+        "QQQ": Decimal("0.6666666666666666666666666667"),
+        "XLK": Decimal("0.3333333333333333333333333333"),
+    }
+
+
+def test_static_allocation_requires_history_for_every_symbol() -> None:
+    strategy = StaticETFAllocationStrategy(
+        weights={"QQQ": Decimal("1"), "XLK": Decimal("1")},
+    )
+    bars = [make_bar("QQQ", date(2024, 1, 1), "100")]
+
+    assert strategy.generate_targets(bars, date(2024, 1, 2)) == {}
+
+
+def test_risk_managed_semiconductor_trend_uses_only_prior_data() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        trend_window_days=3,
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "101"),
+        make_bar("SOXX", date(2024, 1, 3), "103"),
+        make_bar("SOXX", date(2024, 1, 4), "1"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "100"),
+        make_bar("SPY", date(2024, 1, 3), "100"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"SOXX": Decimal("1")}
+
+
+def test_risk_managed_semiconductor_rotates_to_benchmark_when_trend_breaks() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        risk_off_weights={"SPY": Decimal("1")},
+        trend_window_days=2,
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "90"),
+        make_bar("SOXX", date(2024, 1, 3), "80"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"SPY": Decimal("1")}
+
+
+def test_risk_managed_semiconductor_drawdown_breaker_uses_risk_off() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        risk_off_weights={"QQQ": Decimal("1")},
+        trend_window_days=None,
+        drawdown_limit=Decimal("-0.15"),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "120"),
+        make_bar("SOXX", date(2024, 1, 3), "90"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "101"),
+        make_bar("QQQ", date(2024, 1, 3), "102"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"QQQ": Decimal("1")}
+
+
+def test_risk_managed_semiconductor_volatility_target_scales_sleeve() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SMH": Decimal("1"), "SOXX": Decimal("1")},
+        risk_off_weights={"SPY": Decimal("1")},
+        trend_window_days=None,
+        volatility_window_days=2,
+        target_volatility=Decimal("0.01"),
+    )
+    bars = [
+        make_bar("SMH", date(2024, 1, 1), "100"),
+        make_bar("SMH", date(2024, 1, 2), "120"),
+        make_bar("SMH", date(2024, 1, 3), "90"),
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "120"),
+        make_bar("SOXX", date(2024, 1, 3), "90"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert Decimal("0") < targets["SMH"] < Decimal("0.5")
+    assert Decimal("0") < targets["SOXX"] < Decimal("0.5")
+    assert targets["SPY"] > Decimal("0")
+    assert sum(targets.values(), Decimal("0")) == Decimal("1")
+
+
+def test_risk_managed_semiconductor_soft_volatility_throttle() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        risk_off_weights={"QQQ": Decimal("1")},
+        trend_window_days=None,
+        volatility_window_days=2,
+        volatility_exposure_bands=(
+            (Decimal("0.10"), Decimal("1")),
+            (Decimal("4.00"), Decimal("0.50")),
+            (Decimal("999"), Decimal("0")),
+        ),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "120"),
+        make_bar("SOXX", date(2024, 1, 3), "90"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "101"),
+        make_bar("QQQ", date(2024, 1, 3), "102"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"QQQ": Decimal("0.50"), "SOXX": Decimal("0.50")}
+
+
+def test_risk_managed_semiconductor_drawdown_throttle() -> None:
+    strategy = RiskManagedSemiconductorStrategy(
+        sleeve_weights={"SOXX": Decimal("1")},
+        risk_off_weights={"QQQ": Decimal("1")},
+        trend_window_days=None,
+        drawdown_exposure_bands=(
+            (Decimal("0.12"), Decimal("1")),
+            (Decimal("0.18"), Decimal("0.75")),
+            (Decimal("0.25"), Decimal("0.50")),
+            (Decimal("999"), Decimal("0")),
+        ),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "120"),
+        make_bar("SOXX", date(2024, 1, 3), "96"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "101"),
+        make_bar("QQQ", date(2024, 1, 3), "102"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"QQQ": Decimal("0.50"), "SOXX": Decimal("0.50")}
+
+
+def test_market_drawdown_circuit_breaker_uses_only_prior_data() -> None:
+    strategy = MarketDrawdownCircuitBreakerStrategy(
+        risk_symbols=("SOXX", "SMH"),
+        momentum_lookback_days=2,
+        drawdown_symbols=("SPY", "QQQ"),
+        drawdown_lookback_days=3,
+        drawdown_threshold=Decimal("0.12"),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "104"),
+        make_bar("SOXX", date(2024, 1, 3), "108"),
+        make_bar("SOXX", date(2024, 1, 4), "1"),
+        make_bar("SMH", date(2024, 1, 1), "100"),
+        make_bar("SMH", date(2024, 1, 2), "103"),
+        make_bar("SMH", date(2024, 1, 3), "106"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "101"),
+        make_bar("QQQ", date(2024, 1, 3), "102"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"SOXX": Decimal("1")}
+
+
+def test_market_drawdown_circuit_breaker_moves_to_cash_when_triggered() -> None:
+    strategy = MarketDrawdownCircuitBreakerStrategy(
+        risk_symbols=("SOXX", "SMH"),
+        momentum_lookback_days=2,
+        drawdown_symbols=("SPY", "QQQ"),
+        drawdown_lookback_days=3,
+        drawdown_threshold=Decimal("0.12"),
+        triggered_risk_exposure=Decimal("0"),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "104"),
+        make_bar("SOXX", date(2024, 1, 3), "108"),
+        make_bar("SMH", date(2024, 1, 1), "100"),
+        make_bar("SMH", date(2024, 1, 2), "103"),
+        make_bar("SMH", date(2024, 1, 3), "106"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "110"),
+        make_bar("SPY", date(2024, 1, 3), "109"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "110"),
+        make_bar("QQQ", date(2024, 1, 3), "90"),
+    ]
+
+    targets, _, metadata = strategy.generate_targets_with_metadata(
+        bars,
+        date(2024, 1, 4),
+    )
+
+    assert targets == {}
+    assert metadata["breaker_triggered"] is True
+    assert metadata["selected_risk_symbol"] == "SOXX"
+    assert metadata["risk_exposure"] == "0"
+
+
+def test_market_drawdown_circuit_breaker_partial_risk_and_risk_off_weights() -> None:
+    strategy = MarketDrawdownCircuitBreakerStrategy(
+        risk_symbols=("SOXX", "SMH"),
+        risk_off_weights={"SPY": Decimal("1")},
+        momentum_lookback_days=2,
+        drawdown_symbols=("QQQ",),
+        drawdown_lookback_days=3,
+        drawdown_threshold=Decimal("0.12"),
+        triggered_risk_exposure=Decimal("0.50"),
+    )
+    bars = [
+        make_bar("SOXX", date(2024, 1, 1), "100"),
+        make_bar("SOXX", date(2024, 1, 2), "104"),
+        make_bar("SOXX", date(2024, 1, 3), "108"),
+        make_bar("SMH", date(2024, 1, 1), "100"),
+        make_bar("SMH", date(2024, 1, 2), "103"),
+        make_bar("SMH", date(2024, 1, 3), "106"),
+        make_bar("SPY", date(2024, 1, 1), "100"),
+        make_bar("SPY", date(2024, 1, 2), "101"),
+        make_bar("SPY", date(2024, 1, 3), "102"),
+        make_bar("QQQ", date(2024, 1, 1), "100"),
+        make_bar("QQQ", date(2024, 1, 2), "110"),
+        make_bar("QQQ", date(2024, 1, 3), "90"),
+    ]
+
+    targets = strategy.generate_targets(bars, date(2024, 1, 4))
+
+    assert targets == {"SOXX": Decimal("0.50"), "SPY": Decimal("0.50")}
 
 
 def test_monthly_sector_momentum_uses_only_prior_data() -> None:

@@ -25,7 +25,7 @@ from trading_app.paper.models import (
 )
 from trading_app.paper.statement import reconcile_statement_snapshot
 from trading_app.paper.tax import PaperTaxLotTracker
-from trading_app.risk import ProposedOrder, RiskContext, RiskEngine
+from trading_app.risk import ProposedOrder, RiskContext, RiskDecision, RiskEngine
 from trading_app.schemas import Fill, Order, OrderStatus, Position
 
 
@@ -169,6 +169,69 @@ class PaperTradingService:
                 "Risk approved the order and the paper broker accepted it."
                 if accepted
                 else "Risk approved the order, but the paper broker rejected it."
+            ),
+        )
+        self._submissions.append(submission)
+        return submission
+
+    def recover_broker_order(
+        self,
+        broker_order: BrokerOrderState,
+        *,
+        strategy_id: str,
+        as_of: datetime,
+    ) -> PaperOrderSubmission:
+        """Recover a broker-accepted paper order missing from the local ledger."""
+
+        order_id = broker_order.client_order_id or broker_order.broker_order_id
+        existing = next(
+            (
+                submission
+                for submission in self._submissions
+                if submission.order.id == order_id
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+
+        order = Order(
+            id=order_id,
+            symbol=broker_order.symbol,
+            side=broker_order.side,
+            order_type=broker_order.order_type,
+            quantity=broker_order.quantity,
+            limit_price=broker_order.limit_price,
+            status=OrderStatus.NEW,
+            created_at=broker_order.submitted_at,
+            updated_at=broker_order.updated_at,
+        )
+        if self.ledger.get_order(order.id) is None:
+            self.ledger.record_order(order)
+        self._track_order_state(order.id, broker_order, as_of)
+        estimated_price = (
+            broker_order.average_fill_price or broker_order.limit_price or Decimal("0")
+        )
+        submission = PaperOrderSubmission(
+            accepted=True,
+            broker_submitted=True,
+            strategy_id=strategy_id,
+            order=order,
+            broker_order=broker_order,
+            risk_decision=RiskDecision(
+                approved=True,
+                order_id=order.id,
+                signal_id=order.signal_id,
+                symbol=order.symbol,
+                checked_at=as_of,
+                rule_results=(),
+                rejections=(),
+            ),
+            submitted_at=broker_order.submitted_at,
+            estimated_notional=broker_order.quantity * estimated_price,
+            explanation=(
+                "Recovered a broker-accepted paper order that was missing from "
+                "the local ledger."
             ),
         )
         self._submissions.append(submission)
@@ -331,10 +394,15 @@ class PaperTradingService:
             quantity_tolerance=quantity_tolerance,
         )
 
-    def portfolio_report(self, *, as_of: datetime) -> PaperPortfolioReport:
+    def portfolio_report(
+        self,
+        *,
+        as_of: datetime,
+        broker_orders: tuple[BrokerOrderState, ...] | None = None,
+    ) -> PaperPortfolioReport:
         """Return dashboard-ready paper portfolio state."""
 
-        reconciliation = self.reconcile(as_of=as_of)
+        reconciliation = self.reconcile(as_of=as_of, broker_orders=broker_orders)
         return PaperPortfolioReport(
             as_of=as_of,
             ledger_snapshot=reconciliation.ledger_snapshot,

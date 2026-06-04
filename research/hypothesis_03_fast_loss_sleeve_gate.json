@@ -1,0 +1,72 @@
+{
+  "hypothesis": "Hypothesis 3 - Fast-Loss Semiconductor Sleeve Gate",
+  "generated_at": "2026-06-01",
+  "data": {
+    "source": "local SIP daily adjusted parquet bars",
+    "path": "data/market_data/bars/feed=SIP/timeframe=1D/symbol=*/bars.parquet",
+    "start": "2016-01-04",
+    "end": "2026-05-29",
+    "symbols_used": ["SPY", "QQQ", "XLK", "SOXX", "SMH"],
+    "bil_available": false,
+    "static_semiconductor_basket": "equal-weight SOXX/SMH"
+  },
+  "method": {
+    "decision_frequency": "monthly_first_trading_day",
+    "initial_state": "invested_in_semiconductor_sleeve",
+    "warmup_rule": "fast-loss gate cannot trigger until the requested lookback window exists",
+    "leakage_rule": "signals use bars through prior trading day only",
+    "execution_assumption": "prior allocation earns decision-day close-to-close return; new allocation applies after decision-day close",
+    "base_cost_bps": 5,
+    "stress_cost_bps": 25,
+    "variant_count_base": 360,
+    "variant_count_stress": 360
+  },
+  "baselines_base_cost": {
+    "SPY": {"total_return": 3.4099335432, "cagr": 0.1533852913, "max_drawdown": -0.3379479881, "sharpe": 0.9013233602, "delta_vs_spy_pp": 0.0},
+    "QQQ": {"total_return": 6.2818818424, "cagr": 0.2103783274, "max_drawdown": -0.3500407914, "sharpe": 0.9735850273, "delta_vs_spy_pp": 287.1948299194},
+    "XLK": {"total_return": 9.0748945148, "cagr": 0.2487648703, "max_drawdown": -0.3355948064, "sharpe": 1.0367505738, "delta_vs_spy_pp": 566.4960971571},
+    "SOXX": {"total_return": 20.3138576779, "cagr": 0.3420730334, "max_drawdown": -0.4575503356, "sharpe": 1.0572812223, "delta_vs_spy_pp": 1690.3924134706},
+    "SMH": {"total_return": 23.9450229071, "cagr": 0.3625316403, "max_drawdown": -0.4530440415, "sharpe": 1.1228181584, "delta_vs_spy_pp": 2053.5089363925},
+    "SEM_BASKET": {"total_return": 22.1323292156, "cagr": 0.3526818464, "max_drawdown": -0.4552334831, "sharpe": 1.09276081899, "delta_vs_spy_pp": 1872.2395672443}
+  },
+  "best_gate_passing_variant": {
+    "sleeve": "SEM_BASKET",
+    "window_days": 42,
+    "loss_threshold": 0.10,
+    "reentry": "price_above_ma200",
+    "risk_off": "SPY",
+    "base_cost_bps": 5,
+    "total_return": 19.4802329016,
+    "cagr": 0.3369335219,
+    "max_drawdown": -0.3493818022,
+    "sharpe": 1.1325041275,
+    "delta_vs_spy_pp": 1607.02993584,
+    "retain_soxx_outperformance_x": 0.9506845411,
+    "stress_total_return_25bps": 18.6748221988,
+    "stress_delta_vs_spy_pp_25bps": 1526.4888655652,
+    "positive_all_folds": true
+  },
+  "folds_best_gate_passing_variant": [
+    {"fold": "2016-2018", "strategy_return": 0.786, "spy_return": 0.307, "soxx_return": 0.829, "basket_return": 0.778, "delta_vs_spy_pp": 47.9, "max_drawdown": -0.249},
+    {"fold": "2019-2022", "strategy_return": 1.473, "spy_return": 0.634, "soxx_return": 1.305, "basket_return": 1.353, "delta_vs_spy_pp": 84.0, "max_drawdown": -0.339},
+    {"fold": "2023-2026-05-29", "strategy_return": 3.674, "spy_return": 1.072, "soxx_return": 4.072, "basket_return": 4.541, "delta_vs_spy_pp": 260.1, "max_drawdown": -0.349}
+  ],
+  "gate_counts_base_cost": {
+    "delta_vs_spy_gt_800pp": 339,
+    "retain_soxx_outperformance_ge_0_70x": 277,
+    "max_drawdown_better_than_minus_35pct": 14,
+    "max_drawdown_better_than_minus_30pct": 4,
+    "positive_delta_vs_spy_all_folds": 332,
+    "positive_delta_vs_spy_under_25bps_stress": 360
+  },
+  "gate_verdict": {
+    "full_period_delta_vs_spy_gt_800pp": "pass",
+    "retain_at_least_0_70x_soxx_outperformance": "pass_for_best_basket_variant",
+    "max_drawdown_target_better_than_minus_35pct": "pass_barely",
+    "max_drawdown_ideal_better_than_minus_30pct": "fail",
+    "positive_delta_vs_spy_every_fold": "pass",
+    "positive_under_stress_costs": "pass",
+    "not_single_cherry_pick": "partial"
+  },
+  "recommendation": "Keep for second-stage paper research as a semiconductor sleeve risk-control candidate; do not promote to live trading or unconstrained allocation."
+}

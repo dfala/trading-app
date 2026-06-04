@@ -173,7 +173,13 @@ from trading_app.runtime.ops import (
     write_operations_readiness_markdown_report,
     write_supervisor_templates,
 )
-from trading_app.runtime.paper import AlwaysOnPaperRuntime, AlwaysOnPaperRuntimeConfig
+from trading_app.runtime.paper import (
+    AlwaysOnPaperRuntime,
+    AlwaysOnPaperRuntimeConfig,
+    StrategySchedule,
+    build_paper_strategy,
+    default_symbols_for_paper_model,
+)
 from trading_app.runtime.persistence import (
     RuntimePersistenceStore,
     RuntimeRecoveryState,
@@ -229,6 +235,9 @@ from trading_app.runtime.validation import (
 __all__ = [
     "AlwaysOnPaperRuntime",
     "AlwaysOnPaperRuntimeConfig",
+    "StrategySchedule",
+    "build_paper_strategy",
+    "default_symbols_for_paper_model",
     "AlpacaPaperRuntimePreflight",
     "AlpacaPaperRuntimeDryRun",
     "AlpacaPaperRuntimeValidation",

@@ -106,10 +106,7 @@ class RuntimeHealthEngine:
             "market_data",
             RuntimeHealthStatus.DEGRADED,
             "Latest prices are stale or missing.",
-            (
-                snapshot.latest_prices.status.value,
-                *snapshot.latest_prices.missing_symbols,
-            ),
+            snapshot.latest_prices.freshness_evidence,
         )
 
     def _broker_sync_check(self, snapshot: RuntimeSnapshot) -> RuntimeHealthCheck:

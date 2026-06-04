@@ -79,10 +79,129 @@ It is a structured attempt to learn, test, measure, and improve trading ideas be
 
 The project now has a Python paper-trading foundation with schemas, an internal ledger, historical data, backtesting, paper broker abstractions, risk controls, reporting, nightly learning scaffolding, a local dashboard, always-on runtime scaffolding, persistence, operator controls, health checks, validation, and local operations guidance.
 
-The recommended local paper startup path is:
+## Starting The Servers
+
+The production-style local setup uses two servers:
+
+- Next.js operator dashboard: `http://127.0.0.1:3003/`
+- Python paper runtime backend/API: `http://127.0.0.1:8765/`
+
+Use the Next.js URL as the dashboard. The Python URL stays alive for API,
+health, controls, broker sync, and runtime state. Browser requests to the old
+Python dashboard routes redirect to the Next.js dashboard.
+
+If launchd is already installed, check both services with:
+
+```bash
+make launchd-status
+```
+
+To install or restart both launchd services after code, dependency, or `.env`
+changes:
+
+```bash
+make launchd-install
+```
+
+To stop and remove both launchd services:
+
+```bash
+make launchd-uninstall
+```
+
+For manual development without launchd, start the Python backend first:
+
+```bash
+uv run dev
+```
+
+Then start the Next.js dashboard in another terminal:
+
+```bash
+make web-dev
+```
+
+For production-style manual serving instead of Next dev mode:
+
+```bash
+make web-start
+```
+
+Do not stop the Python backend just because the UI moved to Next.js. If `8765`
+is down, the dashboard at `3003` can load HTML but data and controls will fail.
+
+The backend shortcut loads `.env` when present, keeps any credentials already
+exported in your shell, honors the `TRADING_APP_*` runtime defaults from that
+file, runs the required monitor-only dry run first, and starts the Python
+runtime backend at `http://127.0.0.1:8765`. If the backend port is already in
+use, the shortcut automatically tries the next local port and prints the URL it
+selected.
+
+The equivalent explicit command is:
 
 ```bash
 python -m trading_app.runtime.run_alpaca_paper --monitor-only-dry-run-first
 ```
 
-Use `.env.example` for local environment setup, keep the dashboard bound to `127.0.0.1`, and keep all runtime artifacts under ignored `data/runtime/` folders.
+The combined launchd targets call the Python backend script first and the
+Next.js dashboard script second. The Python LaunchAgent uses the fixed backend
+URL `http://127.0.0.1:8765/`; if that port is occupied, startup fails loudly
+instead of silently choosing another port. The Next LaunchAgent builds `web/`,
+starts production Next.js at `http://127.0.0.1:3003/`, and proxies to the Python
+backend. Alpaca credentials stay with the Python backend.
+
+The lower-level scripts are still available when you intentionally want to
+operate only one service:
+
+```bash
+scripts/install_alpaca_paper_launchd.sh
+scripts/status_alpaca_paper_launchd.sh
+scripts/uninstall_alpaca_paper_launchd.sh
+scripts/install_operator_web_launchd.sh
+scripts/status_operator_web_launchd.sh
+scripts/uninstall_operator_web_launchd.sh
+```
+
+## Next.js Frontend
+
+The operator dashboard frontend lives in `web/`. It carries over the Python
+dashboard's seven-screen cockpit: Home, Models, Paper Trading, Risk, Research
+Lab, AI Review, and Learn. The Python runtime remains the trading authority;
+Next.js only renders the UI and proxies browser requests through same-origin
+routes to the local Python backend.
+
+Start the Python backend first:
+
+```bash
+uv run dev
+```
+
+Then start the Next.js UI:
+
+```bash
+make web-install
+make web-dev
+```
+
+The Next app reads `TRADING_APP_BACKEND_URL` on the server side only. The default
+matches the Python runtime backend at `http://127.0.0.1:8765`.
+
+Check the frontend before handing it off:
+
+```bash
+make web-check
+```
+
+For production-style local serving, build and run Next.js on the fixed operator
+dashboard port:
+
+```bash
+make web-start
+```
+
+That serves the React dashboard at `http://127.0.0.1:3003/` and proxies to the
+Python backend at `http://127.0.0.1:8765` by default.
+
+Use `.env.example` for local environment setup, keep the dashboard and backend
+bound to `127.0.0.1`, and keep all runtime artifacts under ignored
+`data/runtime/` folders.

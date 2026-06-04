@@ -276,7 +276,7 @@ REQUIRED_DASHBOARD_CONSISTENCY_CHECKS = frozenset(
 )
 REQUIRED_DASHBOARD_VISUAL_CHECKS = frozenset(
     {
-        "html_document_rendered",
+        "next_dashboard_handoff_configured",
         "paper_boundary_visible",
         "critical_runtime_surfaces_present",
         "operator_controls_present",

@@ -197,8 +197,14 @@ def test_alert_engine_flags_data_risk_and_reconciliation_problems(tmp_path) -> N
     runtime.service.broker._cash = Decimal("9999")
     alerts = RuntimeAlertEngine().evaluate(runtime.snapshot(as_of=AFTER_CLOSE))
     codes = {alert.code for alert in (*stale_cycle.alerts, *alerts)}
+    stale_alert = next(
+        alert
+        for alert in stale_cycle.alerts
+        if alert.code == RuntimeAlertCode.MARKET_DATA_STALE
+    )
 
     assert RuntimeAlertCode.MARKET_DATA_STALE in codes
+    assert "stale_symbols=AAA,BBB,SPY" in stale_alert.evidence
     assert RuntimeAlertCode.RISK_REJECTION in codes
     assert RuntimeAlertCode.RECONCILIATION_BREAK in codes
 

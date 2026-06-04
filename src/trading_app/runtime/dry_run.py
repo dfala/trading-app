@@ -11,10 +11,13 @@ from pathlib import Path
 from trading_app.runtime.cli import parse_symbol_list
 from trading_app.runtime.models import (
     OperatorControlAction,
+    OperatorControlRequest,
+    OperatorControlState,
     RuntimeDryRunReport,
     RuntimeDryRunStep,
     RuntimePreflightStatus,
 )
+from trading_app.runtime.operator import RuntimeControlCenter
 from trading_app.runtime.paper import AlwaysOnPaperRuntime, AlwaysOnPaperRuntimeConfig
 from trading_app.runtime.persistence import RuntimePersistenceStore
 from trading_app.runtime.preflight import AlpacaPaperRuntimePreflight
@@ -125,13 +128,17 @@ class AlpacaPaperRuntimeDryRun:
             )
         )
         orders_before = len(runtime.service.submissions)
+        previous_control_state = runtime.control_center.state
+        previous_control_history = runtime.control_center.history
 
         if self.config.monitor_only:
-            runtime.apply_control(
-                OperatorControlAction.ENABLE_PAPER_KILL_SWITCH,
-                requested_at=now,
-                requested_by="dry-run",
-                reason="monitor-only dry run",
+            runtime.control_center.apply(
+                OperatorControlRequest(
+                    action=OperatorControlAction.ENABLE_PAPER_KILL_SWITCH,
+                    requested_at=now,
+                    requested_by="dry-run",
+                    reason="monitor-only dry run",
+                )
             )
             steps.append(
                 _step(
@@ -143,6 +150,13 @@ class AlpacaPaperRuntimeDryRun:
             )
 
         cycle = runtime.run_once(as_of=now)
+        if self.config.monitor_only:
+            _restore_monitor_only_control_state(
+                runtime,
+                state=previous_control_state,
+                history=previous_control_history,
+                as_of=now,
+            )
         health_report = runtime.health_report(as_of=now)
         runtime_snapshot = runtime.snapshot(as_of=now)
         latest_prices = runtime_snapshot.latest_prices
@@ -371,6 +385,33 @@ def _persistence_step(
         RuntimePreflightStatus.FAILED,
         "Runtime cycle or health evidence was not persisted.",
         as_of,
+    )
+
+
+def _restore_monitor_only_control_state(
+    runtime: AlwaysOnPaperRuntime,
+    *,
+    state: OperatorControlState,
+    history,
+    as_of: datetime,
+) -> None:
+    """Remove temporary dry-run order blocking from live runtime state."""
+
+    runtime.control_center = RuntimeControlCenter(state=state, history=history)
+    runtime._last_control_result = runtime.control_center.last_result
+    runtime._alerts = runtime.alert_engine.evaluate(
+        runtime.snapshot(as_of=as_of),
+        control_state=state,
+    )
+    runtime._health_report = runtime.health_engine.evaluate(
+        runtime.snapshot(as_of=as_of)
+    )
+    runtime.persistence_store.persist_control_state(state)
+    runtime.persistence_store.persist_alerts(runtime._alerts)
+    runtime.persistence_store.persist_health_report(runtime._health_report)
+    runtime.persistence_store.persist_runtime_snapshot(runtime.snapshot(as_of=as_of))
+    runtime.persistence_store.persist_dashboard_snapshot(
+        runtime.dashboard_snapshot(as_of=as_of)
     )
 
 

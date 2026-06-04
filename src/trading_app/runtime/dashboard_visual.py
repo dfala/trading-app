@@ -1,4 +1,4 @@
-"""Rendered dashboard readiness audit for paper-runtime operator review."""
+"""Next dashboard readiness audit for paper-runtime operator review."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from trading_app.dashboard.models import OperatorDashboardSnapshot
-from trading_app.dashboard.render import render_interactive_dashboard_html
 from trading_app.runtime.models import (
     RuntimeDashboardVisualCheck,
     RuntimeDashboardVisualReport,
@@ -16,6 +15,7 @@ from trading_app.runtime.models import (
 from trading_app.runtime.persistence import RuntimePersistenceStore
 
 _CRITICAL_CHECKS = {
+    "next_dashboard_handoff_configured",
     "paper_boundary_visible",
     "critical_runtime_surfaces_present",
     "operator_controls_present",
@@ -30,10 +30,15 @@ _RESPONSIVE_CHECKS = {
     "financial_visuals_present",
     "visual_system_tokens_present",
 }
+_NEXT_SOURCE_PATHS = (
+    Path("web/app/page.tsx"),
+    Path("web/components/dashboard-client.tsx"),
+    Path("web/app/globals.css"),
+)
 
 
 class RuntimeDashboardVisualAuditor:
-    """Audit rendered dashboard HTML for operator-critical surfaces."""
+    """Audit the Next dashboard handoff and operator-critical surfaces."""
 
     def __init__(
         self,
@@ -49,8 +54,8 @@ class RuntimeDashboardVisualAuditor:
     def audit(self, *, as_of: datetime | None = None) -> RuntimeDashboardVisualReport:
         now = as_of or datetime.now(tz=UTC)
         snapshot = self.store.recover().dashboard_snapshot
-        html = render_interactive_dashboard_html(snapshot) if snapshot else ""
-        checks = tuple(_checks(snapshot, html))
+        next_source = _read_next_source()
+        checks = tuple(_checks(snapshot, next_source))
         failures = sum(
             1 for check in checks if check.status == RuntimePreflightStatus.FAILED
         )
@@ -79,8 +84,6 @@ class RuntimeDashboardVisualAuditor:
             summary=_summary(status, failures, len(checks)),
         )
         if self.persist_report:
-            html_path = _write_dashboard_html(html, self.output_dir / "dashboard", now)
-            report = report.model_copy(update={"rendered_html_path": str(html_path)})
             markdown_path = write_dashboard_visual_markdown_report(
                 report,
                 self.output_dir / "reports",
@@ -100,7 +103,7 @@ def render_dashboard_visual_text(report: RuntimeDashboardVisualReport) -> str:
         f"Dashboard visual status: {report.status.value}",
         f"Passed: {_yes_no(report.passed)}",
         f"Output dir: {report.output_dir}",
-        f"Rendered HTML: {report.rendered_html_path or 'not written'}",
+        "Rendered HTML: not written; Next.js owns dashboard rendering",
         f"Markdown report: {report.markdown_path or 'not written'}",
         f"Critical surfaces passed: {report.critical_surface_count}",
         f"Responsive surfaces passed: {report.responsive_surface_count}",
@@ -124,7 +127,8 @@ def render_dashboard_visual_markdown(report: RuntimeDashboardVisualReport) -> st
         "",
         (
             "> Paper trading only. This audit inspects the rendered operator "
-            "dashboard shell for critical paper-runtime surfaces."
+            "dashboard handoff, persisted snapshot, and Next.js source markers "
+            "for critical paper-runtime surfaces."
         ),
         "",
         "## Summary",
@@ -133,7 +137,7 @@ def render_dashboard_visual_markdown(report: RuntimeDashboardVisualReport) -> st
         f"- Passed: `{_yes_no(report.passed)}`",
         f"- Audited at: `{report.as_of.isoformat()}`",
         f"- Output directory: `{report.output_dir}`",
-        f"- Rendered HTML: `{report.rendered_html_path or 'not written'}`",
+        "- Rendered HTML: `not written; Next.js owns dashboard rendering`",
         f"- Critical surfaces passed: `{report.critical_surface_count}`",
         f"- Responsive surfaces passed: `{report.responsive_surface_count}`",
         f"- Failed visual scenarios: `{report.failed_visual_scenarios}`",
@@ -173,7 +177,7 @@ def write_dashboard_visual_markdown_report(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Audit rendered dashboard visual readiness."
+        description="Audit Next dashboard visual readiness."
     )
     parser.add_argument("--output-dir", default="data/runtime")
     parser.add_argument("--no-persist", action="store_true")
@@ -192,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _checks(
     snapshot: OperatorDashboardSnapshot | None,
-    html: str,
+    next_source: str,
 ) -> list[RuntimeDashboardVisualCheck]:
     if snapshot is None:
         return [
@@ -200,151 +204,124 @@ def _checks(
                 "dashboard_snapshot_present",
                 False,
                 "Dashboard snapshot is available for visual audit.",
-                "Dashboard snapshot is missing; rendered dashboard cannot be audited.",
+                "Dashboard snapshot is missing; Next dashboard cannot be audited.",
                 ("state/latest-dashboard-snapshot.json=missing",),
             )
         ]
 
     return [
-        _contains_check(
-            "html_document_rendered",
-            html,
+        _snapshot_check(
+            "next_dashboard_handoff_configured",
+            snapshot,
             (
-                "<!doctype html>",
-                "<html",
-                "<style>",
-                "<script>",
-                "Trading Lab Operator Dashboard",
+                ("mode", "Alpaca Paper"),
+                ("broker", "paper-provider"),
             ),
-            "Interactive dashboard HTML rendered.",
-            "Interactive dashboard HTML is incomplete.",
+            "Python backend exposes an Alpaca Paper snapshot for the Next dashboard.",
+            "Python backend snapshot is not ready for the Next dashboard.",
         ),
-        _contains_check(
+        _snapshot_check(
             "paper_boundary_visible",
-            html,
+            snapshot,
             (
-                "Alpaca Paper",
-                "Paper Boundary",
-                "Live disabled",
-                "Paper only",
-                "$0 real capital",
-                "No live-money actions are available",
+                ("mode", "Alpaca Paper"),
+                ("broker", "paper-provider"),
+                ("live_readiness", "present"),
             ),
-            "Paper/live boundary is visible in the first operator surface.",
-            "Paper/live boundary is not explicit enough in rendered HTML.",
+            "Paper/live boundary data is present for the operator surface.",
+            "Paper/live boundary data is not explicit enough.",
         ),
-        _contains_check(
+        _snapshot_surface_check(
             "critical_runtime_surfaces_present",
-            html,
+            snapshot,
             (
-                "Latest Prices",
-                "Broker connection",
-                "Cash",
-                "Positions",
-                "Open orders",
-                "Recent Fills",
-                "Risk State",
-                "Reconciliation",
-                "Daily Report",
-                "Nightly Learning",
-                "Runtime Proof",
-                "Final Acceptance",
-                "Statement Review",
+                "latest_prices",
+                "cash",
+                "estimated_equity",
+                "open_orders",
+                "paper_report",
+                "daily_report",
+                "nightly_learning",
+                "runtime_state",
             ),
             (
                 "Critical runtime, broker, portfolio, report, and learning "
-                "surfaces render."
+                "surfaces are present in the dashboard snapshot."
             ),
-            "One or more critical runtime surfaces are missing.",
+            "One or more critical runtime surfaces are missing from the snapshot.",
         ),
-        _contains_check(
+        _next_source_check(
             "operator_controls_present",
-            html,
+            next_source,
             (
-                "Operator Controls",
-                'data-control-action="resume_runtime"',
-                'data-control-action="pause_runtime"',
-                'data-control-action="enable_paper_kill_switch"',
-                'data-control-action="force_reconciliation"',
-                'data-control-action="generate_report"',
-                "fetch('/api/control'",
+                "resume_runtime",
+                "pause_runtime",
+                "enable_paper_kill_switch",
+                "force_reconciliation",
+                "generate_report",
+                "/api/control",
             ),
-            "Local operator controls are rendered and wired to the control API.",
-            "Operator controls are missing or not wired in rendered HTML.",
+            "Next operator controls are present and wired to the control API.",
+            "Next operator controls are missing or not wired.",
         ),
-        _alerts_check(snapshot, html),
-        _contains_check(
+        _alerts_check(snapshot),
+        _snapshot_surface_check(
             "data_quality_panel_present",
-            html,
-            (
-                "Data Quality Evidence",
-                'data-field="data-quality-status"',
-                'data-field="data-quality-research-usable"',
-                'data-field="data-quality-trading-usable"',
-                "Quality Issues",
-                "IEX/free data is development-grade",
-            ),
-            "Market-data quality and provenance are visible.",
-            "Market-data quality evidence is missing from rendered HTML.",
+            snapshot,
+            ("daily_report.data_quality_report",),
+            "Market-data quality and provenance are present in the snapshot.",
+            "Market-data quality evidence is missing from the snapshot.",
         ),
-        _contains_check(
+        _snapshot_surface_check(
             "active_model_explanation_present",
-            html,
+            snapshot,
             (
-                "Active Model",
-                'data-field="active-strategy-name"',
-                'data-field="active-strategy-hypothesis"',
-                'data-field="active-strategy-id"',
-                "Known Failure Modes",
-                "AI Role",
-                "Daily close only",
+                "active_strategy_definition",
+                "active_strategy_definition.hypothesis",
+                "active_strategy_definition.failure_modes",
+                "active_strategy_definition.ai_role",
+                "active_strategy_definition.authority",
             ),
-            "Active model explanation and authority are visible.",
-            "Active model explanation is missing from rendered HTML.",
+            "Active model explanation and authority are present in the snapshot.",
+            "Active model explanation is missing from the snapshot.",
         ),
-        _contains_check(
+        _snapshot_surface_check(
             "live_readiness_gated",
-            html,
+            snapshot,
             (
-                "Live Readiness",
-                'data-field="live-readiness-panel-status"',
-                "Live disabled",
-                "No margin, shorts, options",
-                "No live-money actions are available",
+                "live_readiness",
+                "live_readiness.status",
             ),
-            "Live readiness remains visible and gated.",
-            "Live-readiness gating is not obvious in rendered HTML.",
+            "Live readiness remains visible and gated in the snapshot.",
+            "Live-readiness gating is missing from the snapshot.",
         ),
-        _contains_check(
+        _next_source_check(
             "responsive_css_present",
-            html,
+            next_source,
             (
-                '<meta name="viewport"',
                 "display: grid",
                 "display: flex",
                 "grid-template-columns",
                 "@media (max-width: 940px)",
             ),
-            "Responsive desktop/mobile layout rules are present.",
-            "Responsive layout rules are missing from rendered HTML.",
+            "Responsive desktop/mobile layout rules are present in Next CSS.",
+            "Responsive layout rules are missing from Next CSS.",
         ),
-        _contains_check(
+        _next_source_check(
             "financial_visuals_present",
-            html,
+            next_source,
             (
-                "hero__chart",
-                "area-chart",
-                "bar-compare",
-                "<svg",
+                "hero-chart",
+                "replay-scoreboard",
+                "model_arena",
                 "Model Arena",
             ),
-            "Financial visuals and model comparison elements are rendered.",
-            "Financial visual elements are missing from rendered HTML.",
-            minimum_svg_count=2,
+            "Financial visuals and model comparison elements are present in Next.",
+            "Financial visual elements are missing from Next.",
         ),
-        _contains_check(
+        _next_source_check(
             "visual_system_tokens_present",
-            html,
+            next_source,
             (
                 "--canvas: #07090c",
                 "--pos: #2bd576",
@@ -355,55 +332,82 @@ def _checks(
                 "pill--warn",
                 "pill--good",
             ),
-            "Operator-dashboard visual system tokens are present.",
-            "Expected dashboard visual-system tokens are missing.",
+            "Operator-dashboard visual system tokens are present in Next CSS.",
+            "Expected dashboard visual-system tokens are missing from Next CSS.",
         ),
     ]
 
 
-def _alerts_check(
-    snapshot: OperatorDashboardSnapshot,
-    html: str,
-) -> RuntimeDashboardVisualCheck:
-    required = [
-        "Runtime Alerts",
-        "data-alert-list",
-        "Runtime Health",
-        "Incident Command",
-        "row--danger",
-        "row--warn",
-    ]
-    required.extend(_field(alert, "title", "") for alert in snapshot.alerts)
-    if snapshot.health_report is not None:
-        required.append(_enum_value(_field(snapshot.health_report, "status"), ""))
-    missing = tuple(value for value in required if value not in html)
+def _alerts_check(snapshot: OperatorDashboardSnapshot) -> RuntimeDashboardVisualCheck:
+    required = ("alerts", "health_report")
+    missing = tuple(value for value in required if not _surface_value(snapshot, value))
     return _check(
         "alerts_and_degraded_states_visible",
         not missing,
-        "Alerts, incidents, and degraded-state styling are visible.",
-        "Alerts or degraded-state indicators are missing from rendered HTML.",
+        "Alerts, incidents, and degraded-state data are present.",
+        "Alerts or degraded-state data are missing from the snapshot.",
         _evidence(required, missing),
     )
 
 
-def _contains_check(
+def _next_source_check(
     name: str,
-    html: str,
+    source: str,
     required: tuple[str, ...],
     passed_message: str,
     failed_message: str,
-    *,
-    minimum_svg_count: int = 0,
 ) -> RuntimeDashboardVisualCheck:
-    missing = [value for value in required if value not in html]
-    if minimum_svg_count and html.count("<svg") < minimum_svg_count:
-        missing.append(f"<svg count>={minimum_svg_count}")
+    missing = tuple(value for value in required if value not in source)
     return _check(
         name,
         not missing,
         passed_message,
         failed_message,
         _evidence(required, tuple(missing)),
+    )
+
+
+def _snapshot_check(
+    name: str,
+    snapshot: OperatorDashboardSnapshot,
+    required: tuple[tuple[str, str], ...],
+    passed_message: str,
+    failed_message: str,
+) -> RuntimeDashboardVisualCheck:
+    missing: list[str] = []
+    for path, expected in required:
+        value = _surface_value(snapshot, path)
+        if expected == "present":
+            if value is None:
+                missing.append(path)
+        elif expected == "paper-provider":
+            if not _enum_value(value, "").endswith("paper"):
+                missing.append(f"{path}=paper-provider")
+        elif _enum_value(value, "") != expected:
+            missing.append(f"{path}={expected}")
+    return _check(
+        name,
+        not missing,
+        passed_message,
+        failed_message,
+        _evidence([path for path, _ in required], tuple(missing)),
+    )
+
+
+def _snapshot_surface_check(
+    name: str,
+    snapshot: OperatorDashboardSnapshot,
+    required: tuple[str, ...],
+    passed_message: str,
+    failed_message: str,
+) -> RuntimeDashboardVisualCheck:
+    missing = tuple(path for path in required if _surface_value(snapshot, path) is None)
+    return _check(
+        name,
+        not missing,
+        passed_message,
+        failed_message,
+        _evidence(required, missing),
     )
 
 
@@ -438,25 +442,37 @@ def _field(value, name: str, default=None):
     return getattr(value, name, default)
 
 
+def _surface_value(value, path: str):
+    current = value
+    for part in path.split("."):
+        current = _field(current, part)
+        if current is None:
+            return None
+    return current
+
+
 def _enum_value(value, fallback: str) -> str:
     return getattr(value, "value", value) if value is not None else fallback
 
 
-def _write_dashboard_html(html: str, dashboard_dir: Path, as_of: datetime) -> Path:
-    dashboard_dir.mkdir(parents=True, exist_ok=True)
-    path = dashboard_dir / f"dashboard-visual-{_timestamp_id(as_of)}.html"
-    path.write_text(html, encoding="utf-8")
-    return path
+def _read_next_source() -> str:
+    parts: list[str] = []
+    for path in _NEXT_SOURCE_PATHS:
+        try:
+            parts.append(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return "\n".join(parts)
 
 
 def _summary(status: RuntimePreflightStatus, failures: int, total: int) -> str:
     if status == RuntimePreflightStatus.PASSED:
         return (
-            f"Rendered dashboard visual audit passed across {total} operator "
+            f"Next dashboard readiness audit passed across {total} operator "
             "surface check(s)."
         )
     return (
-        f"Rendered dashboard visual audit found {failures} failed check(s). "
+        f"Next dashboard readiness audit found {failures} failed check(s). "
         "Do not claim product-grade dashboard readiness yet."
     )
 

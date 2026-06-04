@@ -16,6 +16,7 @@ from trading_app.runtime import (
     AlwaysOnPaperRuntime,
     AlwaysOnPaperRuntimeConfig,
     PaperRuntimeDryRunConfig,
+    RuntimeAlertCode,
     RuntimePersistenceStore,
     RuntimePreflightStatus,
     render_dry_run_text,
@@ -165,6 +166,13 @@ def test_monitor_only_dry_run_blocks_paper_orders_and_persists(tmp_path) -> None
     assert report.cycle_result is not None
     assert report.cycle_result.broker_synced
     assert recovered.dry_run_report == report
+    assert recovered.control_state is not None
+    assert not recovered.control_state.paper_kill_switch_enabled
+    assert recovered.dashboard_snapshot is not None
+    assert not recovered.dashboard_snapshot.kill_switch_enabled
+    assert RuntimeAlertCode.PAPER_KILL_SWITCH_ENABLED not in {
+        alert.code for alert in recovered.alerts
+    }
     assert (tmp_path / "state" / "latest-dry-run-report.json").exists()
     assert (tmp_path / "journal" / "dry-runs.jsonl").exists()
 

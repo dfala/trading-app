@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
@@ -11,7 +12,7 @@ from trading_app.learning import NightlyLearningRun
 from trading_app.market_data import LatestPriceSnapshot
 from trading_app.paper import PaperPortfolioReport
 from trading_app.reporting import DailyTradingReport
-from trading_app.schemas import TradingModel
+from trading_app.schemas import OrderSide, PortfolioSnapshot, TradingModel
 
 
 class RuntimeStatus(StrEnum):
@@ -91,6 +92,33 @@ class RuntimeAlert(TradingModel):
     message: str = Field(min_length=1)
     evidence: tuple[str, ...] = ()
     resolved: bool = False
+
+
+class ShadowOrderIntent(TradingModel):
+    symbol: str = Field(min_length=1)
+    side: OrderSide
+    quantity: Decimal
+    estimated_price: Decimal
+    estimated_notional: Decimal
+    current_value: Decimal
+    target_value: Decimal
+
+
+class ShadowChallengerObservation(TradingModel):
+    as_of: AwareDatetime
+    model_key: str = Field(min_length=1)
+    strategy_id: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    authority: str = Field(default="shadow", min_length=1)
+    latest_prices_fresh: bool
+    broker_orders_submitted: bool = False
+    targets: dict[str, Decimal]
+    explanation: str = Field(min_length=1)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    orders: tuple[ShadowOrderIntent, ...] = ()
+    ledger_snapshot: PortfolioSnapshot
+    estimated_equity: Decimal
+    previous_estimated_equity: Decimal | None = None
 
 
 class RuntimeHealthStatus(StrEnum):
@@ -598,6 +626,7 @@ class RuntimeCycleResult(TradingModel):
     prices_refreshed: bool = False
     broker_synced: bool = False
     strategy_evaluated: bool = False
+    shadow_challenger_observed: bool = False
     orders_submitted: int = Field(default=0, ge=0)
     fills_applied: int = Field(default=0, ge=0)
     report_written: bool = False
@@ -752,6 +781,8 @@ class RuntimeSnapshot(TradingModel):
     latest_prices: LatestPriceSnapshot | None = None
     paper_report: PaperPortfolioReport | None = None
     daily_report: DailyTradingReport | None = None
+    shadow_challenger: ShadowChallengerObservation | None = None
+    shadow_challengers: tuple[ShadowChallengerObservation, ...] = ()
     nightly_learning: NightlyLearningRun | None = None
     active_model_key: str = Field(min_length=1)
     last_cycle: RuntimeCycleResult | None = None

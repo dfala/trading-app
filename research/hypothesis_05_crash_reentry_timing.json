@@ -1,0 +1,100 @@
+{
+  "hypothesis": "Hypothesis 5 - Crash-Reentry Timing",
+  "data": {
+    "source": "local SIP daily adjusted bars",
+    "path_glob": "data/market_data/bars/feed=SIP/timeframe=1D/symbol=*/bars.parquet",
+    "start": "2016-01-04",
+    "end": "2026-05-29",
+    "rows": 2616,
+    "symbols": ["SPY", "QQQ", "XLK", "SOXX", "SMH"]
+  },
+  "method": {
+    "decision_frequency": "monthly month-end close",
+    "application": "next trading day after signal date",
+    "base_cost_bps": 5,
+    "stress_cost_bps": 25,
+    "exit_modes_tested": ["trend_only", "relmom_only", "marketdd_only", "trend_or_relmom", "trend_or_marketdd", "relmom_or_marketdd", "all_or"],
+    "reentry_rules_tested": ["relmom_positive", "qqq_above_200d", "soxx_above_50d", "soxx_above_100d", "soxx_above_200d", "relmom_and_qqq200", "relmom_and_soxx200", "qqq200_and_soxx100", "relmom_qqq200_soxx100"],
+    "wait_months_tested": [0, 1, 2, 3],
+    "staging_tested": ["full", "staged_25_50_100"],
+    "exposures_tested": ["SOXX", "SEMIBASKET"]
+  },
+  "benchmarks": {
+    "SPY": {"cum_return": 3.4099335432, "cagr": 0.1533852913, "max_drawdown": -0.3379479881, "sharpe": 0.9011505828},
+    "QQQ": {"cum_return": 6.2818818424, "cagr": 0.2103783274, "max_drawdown": -0.3500407914, "sharpe": 0.9733982979},
+    "XLK": {"cum_return": 9.0748945148, "cagr": 0.2487648703, "max_drawdown": -0.3355948064, "sharpe": 1.0365516296},
+    "SOXX": {"cum_return": 20.3138576779, "cagr": 0.3420730334, "max_drawdown": -0.4575503356, "sharpe": 1.0570783039},
+    "SMH": {"cum_return": 23.9450229071, "cagr": 0.3625316403, "max_drawdown": -0.4530440415, "sharpe": 1.1226025402},
+    "SEMIBASKET": {"cum_return": 22.1323292156, "cagr": 0.3526818464, "max_drawdown": -0.4552334831, "sharpe": 1.092551028}
+  },
+  "preferred_variant": {
+    "exposure": "SEMIBASKET",
+    "exit_mode": "marketdd_only",
+    "exit_definition": "SPY drawdown from 252-day high <= -10% or QQQ drawdown from 252-day high <= -12%",
+    "reentry_rule": "qqq_above_200d",
+    "min_wait_months": 2,
+    "staging": "full",
+    "base_cost_metrics": {
+      "cum_return": 17.9236751294,
+      "cagr": 0.3268089328,
+      "ann_vol": 0.2611220307,
+      "sharpe": 1.2162030621,
+      "max_drawdown": -0.2660812153,
+      "delta_vs_spy_pp": 1451.3741586166,
+      "retention_of_soxx_outperformance": 0.8586019122,
+      "exits": 5,
+      "entries": 5,
+      "turnover": 10.0,
+      "avg_exposure": 0.8474770642
+    },
+    "stress_cost_metrics": {
+      "cum_return": 17.5487246706,
+      "cagr": 0.3242578023,
+      "max_drawdown": -0.2677989465,
+      "delta_vs_spy_pp": 1413.8791127427
+    },
+    "folds": {
+      "2016-2018": {"cum_return": 0.7776395427, "spy_cum_return": 0.3074501574, "delta_vs_spy_pp": 47.0189385323, "max_drawdown": -0.2612732199},
+      "2019-2022": {"cum_return": 1.7473822212, "spy_cum_return": 0.6345639379, "delta_vs_spy_pp": 111.2818283217, "max_drawdown": -0.1926853595},
+      "2023-2026-05-29": {"cum_return": 2.8747411753, "spy_cum_return": 1.063502455, "delta_vs_spy_pp": 181.1238720308, "max_drawdown": -0.2660812153}
+    },
+    "position_changes": [
+      {"date": "2019-01-02", "target": 0.0},
+      {"date": "2019-03-01", "target": 1.0},
+      {"date": "2020-03-02", "target": 0.0},
+      {"date": "2020-05-01", "target": 1.0},
+      {"date": "2022-03-01", "target": 0.0},
+      {"date": "2023-02-01", "target": 1.0},
+      {"date": "2023-03-01", "target": 0.0},
+      {"date": "2023-05-01", "target": 1.0},
+      {"date": "2025-04-01", "target": 0.0},
+      {"date": "2025-06-02", "target": 1.0}
+    ]
+  },
+  "gates": {
+    "delta_vs_spy_gt_800pp": true,
+    "retains_0_70x_soxx_outperformance": true,
+    "max_drawdown_below_35pct": true,
+    "max_drawdown_below_30pct": true,
+    "positive_delta_vs_spy_every_fold": true,
+    "positive_under_stress_cost": true,
+    "not_single_parameter_dependent": "partial"
+  },
+  "top_variants": [
+    {"exposure": "SEMIBASKET", "exit_mode": "marketdd_only", "reentry_rule": "qqq_above_200d", "wait": 2, "staging": "full", "cum_return": 17.9236751294, "delta_vs_spy_pp": 1451.3741586166, "max_drawdown": -0.2660812153, "stress_delta_vs_spy_pp": 1413.8791127427},
+    {"exposure": "SOXX", "exit_mode": "marketdd_only", "reentry_rule": "qqq_above_200d", "wait": 2, "staging": "full", "cum_return": 17.2895965444, "delta_vs_spy_pp": 1387.9663001196, "max_drawdown": -0.2878205032, "stress_delta_vs_spy_pp": 1351.7099295144},
+    {"exposure": "SEMIBASKET", "exit_mode": "marketdd_only", "reentry_rule": "qqq_above_200d", "wait": 0, "staging": "full", "cum_return": 16.9347666885, "delta_vs_spy_pp": 1352.4833145308, "max_drawdown": -0.2785941229, "stress_delta_vs_spy_pp": 1316.9476749087},
+    {"exposure": "SEMIBASKET", "exit_mode": "marketdd_only", "reentry_rule": "qqq200_and_soxx100", "wait": 2, "staging": "full", "cum_return": 16.0070774115, "delta_vs_spy_pp": 1259.7143868307, "max_drawdown": -0.2660812153, "stress_delta_vs_spy_pp": 1226.0168548573},
+    {"exposure": "SEMIBASKET", "exit_mode": "marketdd_only", "reentry_rule": "soxx_above_200d", "wait": 2, "staging": "full", "cum_return": 15.6106861029, "delta_vs_spy_pp": 1220.0752559699, "max_drawdown": -0.2660812153, "stress_delta_vs_spy_pp": 1187.163126948},
+    {"exposure": "SEMIBASKET", "exit_mode": "trend_or_marketdd", "reentry_rule": "qqq_above_200d", "wait": 2, "staging": "full", "cum_return": 15.4547895363, "delta_vs_spy_pp": 1204.4855993151, "max_drawdown": -0.2487151423, "stress_delta_vs_spy_pp": 1152.7874393697}
+  ],
+  "family_summary": {
+    "marketdd_only": {"best_delta_vs_spy_pp": 1451.4, "median_delta_vs_spy_pp": 775.6, "best_max_drawdown": -0.266, "stress_positive_count": 144, "fold_positive_count": 144},
+    "trend_or_marketdd": {"best_delta_vs_spy_pp": 1204.5, "median_delta_vs_spy_pp": 638.9, "best_max_drawdown": -0.249, "stress_positive_count": 144, "fold_positive_count": 144},
+    "trend_only": {"best_delta_vs_spy_pp": 984.9, "median_delta_vs_spy_pp": 548.1, "best_max_drawdown": -0.339, "stress_positive_count": 144, "fold_positive_count": 68},
+    "relmom_only": {"best_delta_vs_spy_pp": 820.5, "median_delta_vs_spy_pp": 219.0, "best_max_drawdown": -0.339, "stress_positive_count": 144, "fold_positive_count": 42},
+    "trend_or_relmom": {"best_delta_vs_spy_pp": 385.5, "median_delta_vs_spy_pp": 4.0, "best_max_drawdown": -0.339, "stress_positive_count": 64, "fold_positive_count": 0}
+  },
+  "verdict": "pass_for_research_promotion_not_trading_deployment",
+  "recommendation": "Promote as a U.S.-only paper-research risk-control overlay candidate; validate with stricter point-in-time assumptions, predeclared threshold sensitivity, and walk-forward gates before any live consideration."
+}

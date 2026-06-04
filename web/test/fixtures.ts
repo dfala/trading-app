@@ -1,0 +1,266 @@
+import type { DashboardSnapshot } from "@/lib/types";
+
+export const sampleSnapshot: DashboardSnapshot = {
+  generated_at: "2026-05-29T16:00:00Z",
+  mode: "Alpaca Paper",
+  broker: "alpaca-paper",
+  data_feed_status: "Alpaca latest trade feed",
+  kill_switch_enabled: false,
+  cash: "7500",
+  estimated_equity: "10000",
+  realized_pnl: "0",
+  open_orders: 0,
+  metrics: [
+    {
+      label: "Paper cash",
+      value: "$7,500.00",
+      detail: "Alpaca paper plus internal ledger",
+      tone: "good",
+    },
+    {
+      label: "Runtime",
+      value: "running",
+      detail: "Always-on paper loop",
+      tone: "info",
+    },
+  ],
+  alerts: [
+    {
+      id: "risk-rejection",
+      created_at: "2026-05-29T16:00:00Z",
+      severity: "warning",
+      code: "risk_rejection",
+      title: "Risk rejected an order",
+      message: "Max-orders rule rejected a paper order.",
+      evidence: ["MAX_ORDERS_PER_DAY"],
+      resolved: false,
+    },
+  ],
+  control_state: {
+    paused: false,
+    paper_kill_switch_enabled: false,
+    updated_at: "2026-05-29T16:00:00Z",
+    updated_by: "system",
+    reason: "test",
+  },
+  health_report: {
+    status: "healthy",
+    summary: "Runtime checks are healthy.",
+    next_action: "Monitor.",
+    checks: [
+      {
+        name: "runtime_loop",
+        status: "healthy",
+        message: "Heartbeat is fresh.",
+      },
+    ],
+  },
+  daily_report: {
+    pnl_report: {
+      ending_cash: "7500",
+      estimated_equity: "10000",
+      realized_pnl: "0",
+      unrealized_pnl: "0",
+      open_positions: 1,
+      open_position_symbols: ["SPY"],
+    },
+    risk_report: {
+      severity: "ATTENTION",
+      risk_decisions: 2,
+      approved_orders: 1,
+      rejected_orders: 1,
+      rejection_count: 1,
+      rejection_rules: ["MAX_ORDERS_PER_DAY"],
+      reconciliation_reconciled: true,
+      reconciliation_issue_count: 0,
+    },
+    rejected_signal_report: {
+      rejected_signals: [
+        {
+          order_id: "daily-order-2",
+          symbol: "SPY",
+          rule: "MAX_ORDERS_PER_DAY",
+          message: "max orders per day would be exceeded",
+        },
+      ],
+    },
+    trade_explanations: [
+      {
+        order_id: "daily-order-1",
+        strategy_id: "sector_momentum",
+        symbol: "SPY",
+        side: "BUY",
+        quantity: "5",
+        status: "FILLED",
+        accepted: true,
+        broker_submitted: true,
+        broker_order_id: "broker-order-1",
+        fill_ids: ["daily-fill-1"],
+        signal_rationale:
+          "sector_momentum generated this paper order from strategy target sizing.",
+        ledger_trace: [
+          "order:daily-order-1",
+          "broker_order:broker-order-1",
+          "fill:daily-fill-1",
+          "ledger:fill_applied",
+        ],
+        explanation:
+          "sector_momentum submitted a BUY order for 5 SPY. Risk approved it, broker_submitted=True, and current status is FILLED.",
+        evidence: [
+          "order:daily-order-1",
+          "risk_decision",
+          "broker_order:broker-order-1",
+          "fill:daily-fill-1",
+        ],
+      },
+      {
+        order_id: "daily-order-2",
+        strategy_id: "sector_momentum",
+        symbol: "SPY",
+        side: "BUY",
+        quantity: "1",
+        status: "REJECTED",
+        accepted: false,
+        broker_submitted: false,
+        fill_ids: [],
+        signal_rationale:
+          "sector_momentum generated this paper order from strategy target sizing.",
+        ledger_trace: ["order:daily-order-2", "ledger:not_recorded"],
+        explanation:
+          "sector_momentum submitted a BUY order for 1 SPY. Risk rejected it before broker submission because: MAX_ORDERS_PER_DAY.",
+        evidence: ["order:daily-order-2", "risk_decision"],
+      },
+    ],
+    ai_summary: {
+      generated_by: "grounded-governance-summarizer",
+      summary:
+        "Daily AI review: 2 paper order(s) were reviewed, 1 accepted and 1 rejected. Risk checks require operator attention, and no autonomous model changes were made.",
+      evidence: [
+        "order:daily-order-1",
+        "order:daily-order-2",
+        "fill:daily-fill-1",
+      ],
+      prohibited_actions: [
+        "No autonomous trading authority changes.",
+        "No live-money actions.",
+      ],
+    },
+  },
+  paper_report: {
+    ledger_snapshot: {
+      cash: "7500",
+      positions: [
+        {
+          symbol: "SPY",
+          quantity: "5",
+          average_cost: "500",
+          realized_pnl: "0",
+        },
+      ],
+    },
+    reconciliation: {
+      reconciled: true,
+      issues: [],
+    },
+  },
+  runtime_state: {
+    status: "running",
+    active_model_key: "monthly_sector_momentum:1.0.0",
+    latest_prices: {
+      status: "fresh",
+      source: "alpaca",
+      warning: null,
+    },
+  },
+  autonomous_learning: {
+    run_id: "learning-cycle-nightly-demo",
+    generated_at: "2026-06-01T23:00:00Z",
+    mode: "nightly",
+    hypothesis_id: "fresh-market-data-learning",
+    status: "completed",
+    start_date: "2016-01-04",
+    end_date: "2026-05-29",
+    benchmark: "SPY",
+    candidate_count: 42,
+    completed_report_count: 5,
+    skipped_count: 0,
+    current_champion_model_key:
+      "market_drawdown_circuit_breaker:top-semi-l126-any-dd12-risk0-cash",
+    recommended_challenger_model_key:
+      "market_drawdown_circuit_breaker:top-semi-l126-any-dd12-risk0-cash",
+    top_candidates: [
+      {
+        rank: 1,
+        universe_id: "semiconductor-champions",
+        model_key:
+          "market_drawdown_circuit_breaker:top-semi-l126-any-dd12-risk0-cash",
+        strategy_name: "Market Drawdown Circuit Breaker",
+        full_delta: 1.1614,
+        stress_delta: 1.14,
+        positive_folds: 3,
+        fold_count: 3,
+        min_fold_delta: 0.14,
+        average_fold_delta: 0.42,
+        worst_drawdown: -0.2973,
+        risk_adjusted_score: 2.7,
+        gate_status: "risk gates passed",
+        status: "all folds positive",
+      },
+    ],
+    artifact_paths: {
+      markdown: "data/research/replay/learning-cycle-nightly-demo.md",
+      json: "data/research/replay/learning-cycle-nightly-demo.json",
+      latest_json: "data/runtime/learning/latest-learning-cycle.json",
+    },
+    manual_approval_required: true,
+    active_model_unchanged: true,
+    summary:
+      "Autonomous learning completed and ranked 42 candidate(s). Top challenger stayed within manual approval gates.",
+    next_actions: [
+      "Review the leader against the current champion before any promotion request.",
+      "Keep the active model unchanged until forward evidence confirms the signal.",
+    ],
+  },
+  autonomous_learning_service: {
+    generated_at: "2026-06-01T23:00:00Z",
+    heartbeat_at: "2026-06-01T23:05:00Z",
+    service_status: "running",
+    current_task: null,
+    current_historical_hypothesis_id: null,
+    last_historical_hypothesis_id: "semiconductor-risk-overlays",
+    next_historical_hypothesis_id: "sector-etf-momentum-grid",
+    historical_hypothesis_counts: {
+      "semiconductor-risk-overlays": 1,
+    },
+    last_completed_task: "fresh_market_data_learning",
+    last_cycle_run_id: "learning-cycle-nightly-demo",
+    last_cycle_status: "completed",
+    latest_recommended_challenger_model_key:
+      "market_drawdown_circuit_breaker:top-semi-l126-any-dd12-risk0-cash",
+    completed_cycle_count: 1,
+    failed_cycle_count: 0,
+    next_historical_experiment_due_at: "2026-06-02T03:05:00Z",
+    next_fresh_market_data_due_at: "2026-06-02T20:15:00Z",
+    last_error: null,
+    policy_summary:
+      "Historical experiments run continuously with a 1 minute cooldown and rotate across 5 hypothesis families; fresh market-data learning runs after close; promotion remains manual and evidence-gated.",
+    promotion_gate: {
+      status: "waiting_for_evidence",
+      candidate_model_key:
+        "market_drawdown_circuit_breaker:top-semi-l126-any-dd12-risk0-cash",
+      observation_count: 1,
+      distinct_observation_dates: 1,
+      manual_approval_required: true,
+      summary: "Waiting for repeated cross-day evidence.",
+    },
+  },
+  active_strategy_definition: {
+    name: "Monthly Sector ETF Momentum",
+    strategy_id: "monthly_sector_momentum",
+    version: "1.0.0",
+    benchmark: "SPY",
+    trading_cadence: "daily_close",
+    holding_period: "Approximately one month",
+    universe: ["XLB", "XLC", "XLE", "XLF", "XLI"],
+  },
+};

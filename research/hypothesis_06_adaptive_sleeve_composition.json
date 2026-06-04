@@ -1,0 +1,213 @@
+{
+  "hypothesis": "Hypothesis 6 - Adaptive Semiconductor Sleeve Composition",
+  "worker": 6,
+  "date": "2026-06-01",
+  "data": {
+    "source": "data/market_data/bars/feed=SIP/timeframe=1D/symbol=*/bars.parquet",
+    "start": "2016-01-04",
+    "end": "2026-05-29",
+    "bars": 2616,
+    "symbols": ["SPY", "QQQ", "XLK", "SOXX", "SMH"],
+    "risky_universe": ["SMH", "SOXX", "XLK", "QQQ"],
+    "bil_available": false
+  },
+  "method": {
+    "rebalance": "first trading day of each month",
+    "signal_timing": "signals use bars through prior trading day's close only",
+    "costs_bps": [5, 25],
+    "ranking_families": [
+      "relative_strength",
+      "vol_adjusted_momentum",
+      "drawdown_adjusted_momentum"
+    ],
+    "lookbacks_trading_days": [63, 126, 252],
+    "selection_methods": [
+      "top1_equal",
+      "top2_equal",
+      "top2_inverse_vol"
+    ],
+    "fallbacks": ["SPY", "CASH"]
+  },
+  "benchmarks_5bps": [
+    {
+      "name": "buy_hold_SPY",
+      "total_return": 3.407729,
+      "cagr": 0.15333,
+      "vol": 0.17587,
+      "sharpe": 0.900875,
+      "max_drawdown": -0.337948,
+      "delta_vs_spy_pp": 0.0
+    },
+    {
+      "name": "buy_hold_QQQ",
+      "total_return": 6.278241,
+      "cagr": 0.21032,
+      "vol": 0.221884,
+      "sharpe": 0.97318,
+      "max_drawdown": -0.350041,
+      "delta_vs_spy_pp": 287.051233
+    },
+    {
+      "name": "buy_hold_XLK",
+      "total_return": 9.069857,
+      "cagr": 0.248705,
+      "vol": 0.243371,
+      "sharpe": 1.036353,
+      "max_drawdown": -0.335595,
+      "delta_vs_spy_pp": 566.212849
+    },
+    {
+      "name": "buy_hold_SOXX",
+      "total_return": 20.303201,
+      "cagr": 0.342008,
+      "vol": 0.330688,
+      "sharpe": 1.056932,
+      "max_drawdown": -0.45755,
+      "delta_vs_spy_pp": 1689.547217
+    },
+    {
+      "name": "buy_hold_SMH",
+      "total_return": 23.93255,
+      "cagr": 0.362466,
+      "vol": 0.322556,
+      "sharpe": 1.122452,
+      "max_drawdown": -0.453044,
+      "delta_vs_spy_pp": 2052.482182
+    },
+    {
+      "name": "fixed_50_50_SOXX_SMH_monthly",
+      "total_return": 22.120763,
+      "cagr": 0.352617,
+      "vol": 0.32569,
+      "sharpe": 1.092402,
+      "max_drawdown": -0.455233,
+      "delta_vs_spy_pp": 1871.303447
+    },
+    {
+      "name": "relative_semis_champion_126d_top1_cash_5bps",
+      "total_return": 10.08009,
+      "cagr": 0.260238,
+      "vol": 0.256247,
+      "sharpe": 1.033179,
+      "max_drawdown": -0.388273,
+      "delta_vs_spy_pp": 667.23619
+    }
+  ],
+  "best_variant": {
+    "name": "relative_strength_126d_top1_equal_fallback_SPY_5bps",
+    "kind": "relative_strength",
+    "lookback": 126,
+    "topn": 1,
+    "weighting": "equal",
+    "fallback": "SPY",
+    "cost_bps": 5,
+    "total_return": 18.119806,
+    "cagr": 0.328125,
+    "vol": 0.275775,
+    "sharpe": 1.169519,
+    "max_drawdown": -0.336196,
+    "calmar": 0.975993,
+    "delta_vs_spy_pp": 1471.207694,
+    "soxx_outperformance_capture": 0.87077,
+    "fold_returns": {
+      "2016-2018": 0.688922,
+      "2019-2022": 1.183501,
+      "2023-2026-05-29": 4.184664
+    },
+    "fold_delta_vs_spy_pp": {
+      "2016-2018": 38.2,
+      "2019-2022": 54.9,
+      "2023-2026-05-29": 312.1
+    },
+    "all_folds_positive_delta": true,
+    "avg_monthly_turnover": 0.536,
+    "stress_25bps": {
+      "total_return": 15.713898,
+      "delta_vs_spy_pp": 1230.616904,
+      "max_drawdown": -0.336196
+    }
+  },
+  "gate_results": {
+    "full_period_delta_vs_spy_gt_800pp": "pass",
+    "soxx_outperformance_capture_gte_0_70": "pass",
+    "max_drawdown_target_lt_35pct": "pass",
+    "max_drawdown_ideal_lt_30pct": "fail",
+    "positive_delta_vs_spy_every_fold": "pass",
+    "positive_under_25bps_stress": "pass",
+    "not_single_parameter_dependent": "pass_with_caveat"
+  },
+  "top_variants_5bps": [
+    {
+      "name": "relative_strength_126d_top1_equal_fallback_SPY_5bps",
+      "total_return": 18.119806,
+      "cagr": 0.328125,
+      "sharpe": 1.169519,
+      "max_drawdown": -0.336196,
+      "delta_vs_spy_pp": 1471.207694,
+      "soxx_outperformance_capture": 0.87077
+    },
+    {
+      "name": "drawdown_adjusted_momentum_63d_top1_equal_fallback_SPY_5bps",
+      "total_return": 16.815474,
+      "cagr": 0.319131,
+      "sharpe": 1.234012,
+      "max_drawdown": -0.350622,
+      "delta_vs_spy_pp": 1340.774522,
+      "soxx_outperformance_capture": 0.79357
+    },
+    {
+      "name": "vol_adjusted_momentum_63d_top1_equal_fallback_SPY_5bps",
+      "total_return": 16.670076,
+      "cagr": 0.318092,
+      "sharpe": 1.240277,
+      "max_drawdown": -0.350622,
+      "delta_vs_spy_pp": 1326.234726,
+      "soxx_outperformance_capture": 0.784965
+    },
+    {
+      "name": "vol_adjusted_momentum_126d_top1_equal_fallback_SPY_5bps",
+      "total_return": 16.193641,
+      "cagr": 0.314632,
+      "sharpe": 1.175892,
+      "max_drawdown": -0.342891,
+      "delta_vs_spy_pp": 1278.591282,
+      "soxx_outperformance_capture": 0.756766
+    },
+    {
+      "name": "drawdown_adjusted_momentum_126d_top1_equal_fallback_SPY_5bps",
+      "total_return": 14.9918,
+      "cagr": 0.305502,
+      "sharpe": 1.14143,
+      "max_drawdown": -0.342891,
+      "delta_vs_spy_pp": 1158.407106,
+      "soxx_outperformance_capture": 0.685632
+    },
+    {
+      "name": "relative_strength_126d_top2_inverse_vol_fallback_SPY_5bps",
+      "total_return": 14.213039,
+      "cagr": 0.29925,
+      "sharpe": 1.105617,
+      "max_drawdown": -0.318437,
+      "delta_vs_spy_pp": 1080.531029,
+      "soxx_outperformance_capture": 0.639539
+    },
+    {
+      "name": "relative_strength_126d_top1_equal_fallback_CASH_5bps",
+      "total_return": 12.599212,
+      "cagr": 0.285313,
+      "sharpe": 1.118104,
+      "max_drawdown": -0.336196,
+      "delta_vs_spy_pp": 919.148335,
+      "soxx_outperformance_capture": 0.544021
+    },
+    {
+      "name": "vol_adjusted_momentum_63d_top1_equal_fallback_CASH_5bps",
+      "total_return": 12.118,
+      "cagr": 0.281,
+      "sharpe": 1.296,
+      "max_drawdown": -0.245,
+      "delta_vs_spy_pp": 871.026,
+      "soxx_outperformance_capture": 0.516
+    }
+  ]
+}

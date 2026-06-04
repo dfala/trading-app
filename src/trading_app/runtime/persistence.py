@@ -4,15 +4,26 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from trading_app.broker import (
     BrokerReconciliationReport,
     BrokerStatementReconciliationReport,
 )
-from trading_app.dashboard.models import OperatorDashboardSnapshot
+from trading_app.dashboard.models import (
+    DashboardPortfolioHistoryPoint,
+    OperatorDashboardSnapshot,
+)
 from trading_app.learning import NightlyLearningRun, write_learning_markdown_report
+from trading_app.learning.autonomous import (
+    AutonomousLearningCycleRun,
+    AutonomousLearningLeaderboard,
+)
+from trading_app.learning.autonomous_service import (
+    AutonomousLearningServiceState,
+)
 from trading_app.market_data import LatestPriceSnapshot
 from trading_app.paper import (
     PaperOrderStatus,
@@ -53,6 +64,7 @@ from trading_app.runtime.models import (
     RuntimeSnapshot,
     RuntimeSoakEvidenceReport,
     RuntimeValidationReport,
+    ShadowChallengerObservation,
 )
 from trading_app.schemas import Fill
 
@@ -68,8 +80,12 @@ class RuntimeRecoveryState:
         events: tuple[RuntimeEvent, ...],
         daily_report: DailyTradingReport | None,
         nightly_learning: NightlyLearningRun | None,
+        autonomous_learning: AutonomousLearningCycleRun | None,
+        autonomous_learning_service: AutonomousLearningServiceState | None,
         daily_report_path: Path | None,
         learning_report_path: Path | None,
+        shadow_challenger: ShadowChallengerObservation | None,
+        shadow_challengers: tuple[ShadowChallengerObservation, ...],
         submissions: tuple[PaperOrderSubmission, ...],
         order_statuses: tuple[PaperOrderStatus, ...],
         fills: tuple[Fill, ...],
@@ -90,8 +106,12 @@ class RuntimeRecoveryState:
         self.events = events
         self.daily_report = daily_report
         self.nightly_learning = nightly_learning
+        self.autonomous_learning = autonomous_learning
+        self.autonomous_learning_service = autonomous_learning_service
         self.daily_report_path = daily_report_path
         self.learning_report_path = learning_report_path
+        self.shadow_challenger = shadow_challenger
+        self.shadow_challengers = shadow_challengers
         self.submissions = submissions
         self.order_statuses = order_statuses
         self.fills = fills
@@ -760,6 +780,52 @@ class RuntimePersistenceStore:
         self._write_model(self.state_dir / "latest-reconciliation.json", report)
         self._append_model(self.journal_dir / "reconciliation.jsonl", report)
 
+    def persist_shadow_challenger_observation(
+        self,
+        observation: ShadowChallengerObservation | None,
+    ) -> None:
+        if observation is None:
+            return
+        self._write_model(
+            self.state_dir / "latest-shadow-challenger-observation.json",
+            observation,
+        )
+        self._append_model(
+            self.journal_dir / "shadow-challenger-observations.jsonl",
+            observation,
+        )
+
+    def persist_shadow_challenger_observations(
+        self,
+        observations: tuple[ShadowChallengerObservation, ...],
+    ) -> None:
+        self._write_model_list(
+            self.state_dir / "latest-shadow-challenger-observations.json",
+            observations,
+        )
+
+    def read_shadow_challenger_observation(
+        self,
+    ) -> ShadowChallengerObservation | None:
+        return self._read_model(
+            self.state_dir / "latest-shadow-challenger-observation.json",
+            ShadowChallengerObservation,
+        )
+
+    def read_shadow_challenger_observations(
+        self,
+    ) -> tuple[ShadowChallengerObservation, ...]:
+        observations = tuple(
+            self._read_model_list(
+                self.state_dir / "latest-shadow-challenger-observations.json",
+                ShadowChallengerObservation,
+            )
+        )
+        if observations:
+            return observations
+        legacy = self.read_shadow_challenger_observation()
+        return (legacy,) if legacy is not None else ()
+
     def persist_statement_reconciliation(
         self,
         report: BrokerStatementReconciliationReport,
@@ -838,6 +904,28 @@ class RuntimePersistenceStore:
     def read_learning_report_path(self) -> Path | None:
         return self._read_path(self.state_dir / "latest-learning-run-path.json")
 
+    def read_autonomous_learning_cycle(self) -> AutonomousLearningCycleRun | None:
+        return self._read_optional_model(
+            self.learning_dir / "latest-learning-cycle.json",
+            AutonomousLearningCycleRun,
+        )
+
+    def read_autonomous_learning_leaderboard(
+        self,
+    ) -> AutonomousLearningLeaderboard | None:
+        return self._read_optional_model(
+            self.learning_dir / "learning-leaderboard.json",
+            AutonomousLearningLeaderboard,
+        )
+
+    def read_autonomous_learning_service_state(
+        self,
+    ) -> AutonomousLearningServiceState | None:
+        return self._read_optional_model(
+            self.learning_dir / "latest-autonomous-service-state.json",
+            AutonomousLearningServiceState,
+        )
+
     def persist_runtime_snapshot(self, snapshot: RuntimeSnapshot) -> None:
         self._write_model(self.state_dir / "latest-runtime-snapshot.json", snapshot)
 
@@ -847,7 +935,52 @@ class RuntimePersistenceStore:
         if snapshot is None:
             return
         self._write_model(self.state_dir / "latest-dashboard-snapshot.json", snapshot)
-        self._append_model(self.journal_dir / "dashboard-snapshots.jsonl", snapshot)
+        self._append_model(
+            self.journal_dir / "dashboard-portfolio-history.jsonl",
+            DashboardPortfolioHistoryPoint(
+                as_of=snapshot.generated_at,
+                estimated_equity=snapshot.estimated_equity,
+                cash=snapshot.cash,
+                realized_pnl=snapshot.realized_pnl,
+            ),
+        )
+
+    def read_dashboard_snapshot(self) -> OperatorDashboardSnapshot | None:
+        return self._read_model(
+            self.state_dir / "latest-dashboard-snapshot.json",
+            OperatorDashboardSnapshot,
+        )
+
+    def read_dashboard_portfolio_history(
+        self, *, limit: int = 390
+    ) -> tuple[DashboardPortfolioHistoryPoint, ...]:
+        if limit <= 0:
+            return ()
+
+        compact_path = self.journal_dir / "dashboard-portfolio-history.jsonl"
+        compact_points = self._read_jsonl_tail(
+            compact_path,
+            DashboardPortfolioHistoryPoint,
+            limit,
+        )
+        if compact_points:
+            return tuple(compact_points[-limit:])
+
+        legacy_path = self.journal_dir / "dashboard-snapshots.jsonl"
+        points: list[DashboardPortfolioHistoryPoint] = []
+        for line in _tail_lines(legacy_path, limit):
+            if not line.strip():
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            point = _dashboard_history_point(payload)
+            if point is not None:
+                points.append(point)
+        return tuple(points[-limit:])
 
     def persist_snapshot(self, snapshot: RuntimeSnapshot) -> None:
         self.persist_runtime_snapshot(snapshot)
@@ -915,8 +1048,12 @@ class RuntimePersistenceStore:
             nightly_learning=self._read_model(
                 self.state_dir / "latest-learning-run.json", NightlyLearningRun
             ),
+            autonomous_learning=self.read_autonomous_learning_cycle(),
+            autonomous_learning_service=(self.read_autonomous_learning_service_state()),
             daily_report_path=daily_report_path,
             learning_report_path=self.read_learning_report_path(),
+            shadow_challenger=self.read_shadow_challenger_observation(),
+            shadow_challengers=self.read_shadow_challenger_observations(),
             submissions=tuple(_dedupe_by_order_id(submissions)),
             order_statuses=tuple(_latest_order_statuses(order_statuses)),
             fills=tuple(_dedupe_by_fill_id(fills)),
@@ -945,10 +1082,7 @@ class RuntimePersistenceStore:
                 self.state_dir / "latest-validation-report.json",
                 RuntimeValidationReport,
             ),
-            dashboard_snapshot=self._read_model(
-                self.state_dir / "latest-dashboard-snapshot.json",
-                OperatorDashboardSnapshot,
-            ),
+            dashboard_snapshot=self.read_dashboard_snapshot(),
             statement_reconciliation=self.read_statement_reconciliation_report(),
             statement_reconciliation_path=self.read_statement_reconciliation_path(),
         )
@@ -989,6 +1123,23 @@ class RuntimePersistenceStore:
             return None
         return model_type.model_validate_json(path.read_text(encoding="utf-8"))
 
+    def _read_optional_model(self, path: Path, model_type):
+        try:
+            return self._read_model(path, model_type)
+        except (OSError, ValidationError, json.JSONDecodeError):
+            return None
+
+    def _read_jsonl_tail(self, path: Path, model_type, limit: int) -> list:
+        records = []
+        for line in _tail_lines(path, limit):
+            if not line.strip():
+                continue
+            try:
+                records.append(model_type.model_validate_json(line))
+            except (ValidationError, json.JSONDecodeError):
+                continue
+        return records
+
     def _read_jsonl(self, path: Path, model_type) -> list:
         if not path.exists():
             return []
@@ -1013,6 +1164,30 @@ class RuntimePersistenceStore:
         payload = json.loads(path.read_text(encoding="utf-8"))
         value = payload.get("path")
         return Path(value) if value else None
+
+
+def _tail_lines(path: Path, limit: int, *, chunk_size: int = 65536) -> list[str]:
+    if limit <= 0 or not path.exists():
+        return []
+    chunks: list[bytes] = []
+    newline_count = 0
+    try:
+        with path.open("rb") as file:
+            file.seek(0, 2)
+            position = file.tell()
+            while position > 0 and newline_count <= limit:
+                read_size = min(chunk_size, position)
+                position -= read_size
+                file.seek(position)
+                chunk = file.read(read_size)
+                chunks.append(chunk)
+                newline_count += chunk.count(b"\n")
+    except OSError:
+        return []
+    if not chunks:
+        return []
+    lines = b"".join(reversed(chunks)).decode("utf-8", errors="replace").splitlines()
+    return lines[-limit:]
 
 
 def _dedupe_by_order_id(
@@ -1040,3 +1215,24 @@ def _dedupe_by_fill_id(fills: list[Fill]) -> list[Fill]:
     for fill in fills:
         by_fill_id[fill.id] = fill
     return sorted(by_fill_id.values(), key=lambda item: item.filled_at)
+
+
+def _dashboard_history_point(
+    payload: dict[str, Any],
+) -> DashboardPortfolioHistoryPoint | None:
+    as_of = payload.get("generated_at")
+    estimated_equity = payload.get("estimated_equity")
+    if as_of is None or estimated_equity is None:
+        return None
+    history_payload = {
+        "as_of": as_of,
+        "estimated_equity": estimated_equity,
+        "cash": payload.get("cash"),
+        "realized_pnl": payload.get("realized_pnl"),
+    }
+    try:
+        return DashboardPortfolioHistoryPoint.model_validate_json(
+            json.dumps(history_payload)
+        )
+    except (TypeError, ValueError, ValidationError):
+        return None

@@ -32,8 +32,15 @@ from trading_app.strategies.benchmark_relative import (
 )
 from trading_app.strategies.cash_rotation import CashRotationETFStrategy
 from trading_app.strategies.defensive_regime import DefensiveRegimeSwitchETFStrategy
+from trading_app.strategies.market_drawdown_circuit_breaker import (
+    MarketDrawdownCircuitBreakerStrategy,
+)
 from trading_app.strategies.mean_reversion import MeanReversionETFStrategy
+from trading_app.strategies.risk_managed_semiconductor import (
+    RiskManagedSemiconductorStrategy,
+)
 from trading_app.strategies.sector_momentum import MonthlySectorMomentumStrategy
+from trading_app.strategies.static_allocation import StaticETFAllocationStrategy
 from trading_app.strategies.trend_following import TrendFollowingETFStrategy
 from trading_app.strategies.volatility_aware import VolatilityAwareETFStrategy
 
@@ -211,6 +218,9 @@ class StrategyResearchEvaluationRunner:
 def default_strategy_factories() -> dict[str, StrategyFactory]:
     return {
         "monthly_sector_momentum": _monthly_sector_momentum_factory,
+        "static_etf_allocation": _static_allocation_factory,
+        "risk_managed_semiconductor": _risk_managed_semiconductor_factory,
+        "market_drawdown_circuit_breaker": (_market_drawdown_circuit_breaker_factory),
         "trend_following_etf": _trend_following_factory,
         "mean_reversion_etf": _mean_reversion_factory,
         "volatility_aware_etf": _volatility_aware_factory,
@@ -225,6 +235,77 @@ def _monthly_sector_momentum_factory(parameters: dict[str, Any]):
         universe=tuple(parameters["universe"]),
         lookback_days=int(parameters["lookback_days"]),
         top_n=int(parameters["top_n"]),
+    )
+
+
+def _static_allocation_factory(parameters: dict[str, Any]):
+    return StaticETFAllocationStrategy(
+        weights={
+            str(symbol): Decimal(str(weight))
+            for symbol, weight in dict(parameters["weights"]).items()
+        },
+        benchmark=str(parameters.get("benchmark", "SPY")),
+    )
+
+
+def _risk_managed_semiconductor_factory(parameters: dict[str, Any]):
+    target_volatility = parameters.get("target_volatility")
+    drawdown_limit = parameters.get("drawdown_limit")
+    return RiskManagedSemiconductorStrategy(
+        sleeve_weights={
+            str(symbol): Decimal(str(weight))
+            for symbol, weight in dict(parameters["sleeve_weights"]).items()
+        },
+        risk_off_weights={
+            str(symbol): Decimal(str(weight))
+            for symbol, weight in dict(parameters.get("risk_off_weights", {})).items()
+        },
+        benchmark=str(parameters.get("benchmark", "SPY")),
+        trend_window_days=parameters.get("trend_window_days"),
+        relative_momentum_days=parameters.get("relative_momentum_days"),
+        relative_momentum_symbols=tuple(
+            parameters.get("relative_momentum_symbols", ())
+        ),
+        volatility_window_days=parameters.get("volatility_window_days"),
+        target_volatility=(
+            Decimal(str(target_volatility)) if target_volatility is not None else None
+        ),
+        volatility_exposure_bands=tuple(
+            (Decimal(str(threshold)), Decimal(str(exposure)))
+            for threshold, exposure in parameters.get(
+                "volatility_exposure_bands",
+                (),
+            )
+        ),
+        drawdown_limit=(
+            Decimal(str(drawdown_limit)) if drawdown_limit is not None else None
+        ),
+        drawdown_exposure_bands=tuple(
+            (Decimal(str(threshold)), Decimal(str(exposure)))
+            for threshold, exposure in parameters.get("drawdown_exposure_bands", ())
+        ),
+    )
+
+
+def _market_drawdown_circuit_breaker_factory(parameters: dict[str, Any]):
+    drawdown_threshold = parameters.get("drawdown_threshold")
+    return MarketDrawdownCircuitBreakerStrategy(
+        risk_symbols=tuple(parameters["risk_symbols"]),
+        risk_off_weights={
+            str(symbol): Decimal(str(weight))
+            for symbol, weight in dict(parameters.get("risk_off_weights", {})).items()
+        },
+        benchmark=str(parameters.get("benchmark", "SPY")),
+        momentum_lookback_days=int(parameters["momentum_lookback_days"]),
+        drawdown_symbols=tuple(parameters["drawdown_symbols"]),
+        drawdown_lookback_days=int(parameters["drawdown_lookback_days"]),
+        drawdown_threshold=(
+            Decimal(str(drawdown_threshold)) if drawdown_threshold is not None else None
+        ),
+        triggered_risk_exposure=Decimal(
+            str(parameters.get("triggered_risk_exposure", "0"))
+        ),
+        trigger_mode=str(parameters.get("trigger_mode", "any")),
     )
 
 

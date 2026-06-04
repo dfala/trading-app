@@ -59,6 +59,17 @@ def test_alpaca_adapter_submits_market_order_and_maps_response() -> None:
     assert portfolio.positions[0].quantity == Decimal("2")
 
 
+def test_alpaca_adapter_maps_sdk_enum_response_values() -> None:
+    client = FakeAlpacaClient(return_enum_response=True)
+    adapter = AlpacaPaperBrokerAdapter(client=client)
+
+    state = adapter.submit_order(make_order())
+
+    assert state.side == OrderSide.BUY
+    assert state.order_type == OrderType.MARKET
+    assert state.status == OrderStatus.NEW
+
+
 def test_alpaca_adapter_validates_order_history_symbol_filters() -> None:
     client = FakeAlpacaClient()
     adapter = AlpacaPaperBrokerAdapter(client=client)
@@ -358,18 +369,23 @@ def test_statement_reconciliation_reports_statement_mismatches() -> None:
 
 
 class FakeAlpacaClient:
-    def __init__(self) -> None:
+    def __init__(self, *, return_enum_response: bool = False) -> None:
         self.submitted_order_data = None
         self.order_filters = []
+        self.return_enum_response = return_enum_response
 
     def submit_order(self, order_data):
         self.submitted_order_data = order_data
+        side = order_data.side if self.return_enum_response else order_data.side.value
+        order_type = (
+            order_data.type if self.return_enum_response else order_data.type.value
+        )
         return SimpleNamespace(
             id="alpaca-order-1",
             client_order_id=order_data.client_order_id,
             symbol=order_data.symbol,
-            side=order_data.side.value,
-            type=order_data.type.value,
+            side=side,
+            type=order_type,
             qty=str(order_data.qty),
             filled_qty="0",
             status="new",

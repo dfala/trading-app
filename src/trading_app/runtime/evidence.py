@@ -609,7 +609,7 @@ class RuntimeEvidenceBundleBuilder:
                 *coverage_gap,
             ),
             next_action=(
-                "Fix rendered dashboard surface gaps and rerun the visual audit."
+                "Fix Next dashboard readiness gaps and rerun the visual audit."
             )
             if not passed
             else "No action required.",

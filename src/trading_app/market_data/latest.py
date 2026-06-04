@@ -51,6 +51,23 @@ class LatestPriceSnapshot(TradingModel):
     def all_fresh(self) -> bool:
         return self.status == LatestPriceStatus.FRESH and not self.missing_symbols
 
+    @property
+    def stale_symbols(self) -> tuple[str, ...]:
+        return tuple(
+            record.symbol
+            for record in self.prices
+            if record.status == LatestPriceStatus.STALE
+        )
+
+    @property
+    def freshness_evidence(self) -> tuple[str, ...]:
+        evidence = [self.status.value]
+        if self.stale_symbols:
+            evidence.append(f"stale_symbols={','.join(self.stale_symbols)}")
+        if self.missing_symbols:
+            evidence.append(f"missing_symbols={','.join(self.missing_symbols)}")
+        return tuple(evidence)
+
 
 class LatestPriceFetcher(Protocol):
     def fetch_latest_prices(
