@@ -13,10 +13,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from trading_app.dashboard.model_performance import build_model_performance_payload
 from trading_app.dashboard.snapshot import build_demo_dashboard_snapshot
+from trading_app.runtime.live_sandbox import LiveSandboxControlRequest
 from trading_app.runtime.models import OperatorControlRequest
 
 DashboardSnapshotProvider = Callable[[], Any]
 DashboardControlHandler = Callable[[OperatorControlRequest], Any]
+DashboardLiveSandboxControlHandler = Callable[[LiveSandboxControlRequest], Any]
 DashboardHealthProvider = Callable[[], Any]
 _LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 _REDIRECT_STATUSES = frozenset(
@@ -37,6 +39,7 @@ def dashboard_response(
     body: str = "",
     snapshot_provider: DashboardSnapshotProvider | None = None,
     control_handler: DashboardControlHandler | None = None,
+    live_sandbox_control_handler: DashboardLiveSandboxControlHandler | None = None,
     health_provider: DashboardHealthProvider | None = None,
     dashboard_redirect_url: str | None = None,
 ) -> tuple[HTTPStatus, str, str]:
@@ -49,11 +52,13 @@ def dashboard_response(
     parsed_url = urlsplit(path)
     route_path = parsed_url.path
     if method == "POST":
-        return control_response(
-            route_path,
-            body=body,
-            control_handler=control_handler,
-        )
+        if route_path == "/api/live-sandbox/control":
+            return live_sandbox_control_response(
+                route_path,
+                body=body,
+                control_handler=live_sandbox_control_handler,
+            )
+        return control_response(route_path, body=body, control_handler=control_handler)
     if method != "GET":
         return (
             HTTPStatus.METHOD_NOT_ALLOWED,
@@ -80,6 +85,23 @@ def dashboard_response(
         except Exception as error:
             return _provider_error_response(
                 "dashboard snapshot unavailable",
+                error,
+            )
+        return (
+            HTTPStatus.OK,
+            "application/json; charset=utf-8",
+            body,
+        )
+    if route_path == "/api/live-sandbox":
+        try:
+            snapshot = provider()
+            live_sandbox = getattr(snapshot, "live_sandbox", None)
+            if isinstance(snapshot, dict):
+                live_sandbox = snapshot.get("live_sandbox")
+            body = snapshot_json(live_sandbox or {"status": "unavailable"})
+        except Exception as error:
+            return _provider_error_response(
+                "live sandbox snapshot unavailable",
                 error,
             )
         return (
@@ -173,6 +195,44 @@ def control_response(
     )
 
 
+def live_sandbox_control_response(
+    path: str,
+    *,
+    body: str,
+    control_handler: DashboardLiveSandboxControlHandler | None = None,
+) -> tuple[HTTPStatus, str, str]:
+    """Handle a local live-sandbox control action without binding a socket."""
+
+    if path != "/api/live-sandbox/control":
+        return HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", "Not found"
+    if control_handler is None:
+        return (
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "application/json; charset=utf-8",
+            '{"error":"live sandbox control handler unavailable"}',
+        )
+    try:
+        payload = json.loads(body or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("control payload must be an object")
+        payload.setdefault("requested_at", datetime.now(tz=UTC).isoformat())
+        payload.setdefault("requested_by", "local-dashboard")
+        payload.setdefault("reason", "dashboard live sandbox control")
+        request = LiveSandboxControlRequest.model_validate_json(json.dumps(payload))
+        result = control_handler(request)
+    except Exception as error:
+        return (
+            HTTPStatus.BAD_REQUEST,
+            "application/json; charset=utf-8",
+            json.dumps({"error": str(error)}),
+        )
+    return (
+        HTTPStatus.OK,
+        "application/json; charset=utf-8",
+        snapshot_json(result),
+    )
+
+
 def snapshot_json(snapshot: Any) -> str:
     """Serialize a dashboard snapshot into JSON suitable for the browser."""
 
@@ -203,6 +263,7 @@ def create_dashboard_server(
     *,
     snapshot_provider: DashboardSnapshotProvider | None = None,
     control_handler: DashboardControlHandler | None = None,
+    live_sandbox_control_handler: DashboardLiveSandboxControlHandler | None = None,
     health_provider: DashboardHealthProvider | None = None,
     dashboard_redirect_url: str | None = None,
     allow_public: bool = False,
@@ -224,6 +285,7 @@ def create_dashboard_server(
                 self.path,
                 snapshot_provider=provider,
                 health_provider=health_provider,
+                live_sandbox_control_handler=live_sandbox_control_handler,
                 dashboard_redirect_url=dashboard_redirect_url,
             )
             if status in _REDIRECT_STATUSES:
@@ -236,6 +298,7 @@ def create_dashboard_server(
                 self.path,
                 snapshot_provider=provider,
                 health_provider=health_provider,
+                live_sandbox_control_handler=live_sandbox_control_handler,
                 dashboard_redirect_url=dashboard_redirect_url,
             )
             if status in _REDIRECT_STATUSES:
@@ -256,6 +319,7 @@ def create_dashboard_server(
                 body=body,
                 snapshot_provider=provider,
                 control_handler=control_handler,
+                live_sandbox_control_handler=live_sandbox_control_handler,
                 health_provider=health_provider,
             )
             self._write_payload(status, content_type, response_body, no_store=True)

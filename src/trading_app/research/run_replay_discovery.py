@@ -167,6 +167,15 @@ class CandidateScore:
     benchmark_ladder: dict[str, float]
     retention_vs_soxx: float | None
     drawdown_delta_vs_semis: float | None
+    recent_window_excess_share: dict[str, float]
+    late_entry_risk: bool
+    late_entry_risk_reason: str | None
+    portfolio_governance_classification: str
+    champion_eligible: bool
+    average_semiconductor_exposure: float
+    peak_semiconductor_exposure: float
+    material_semiconductor_exposure_ratio: float
+    portfolio_governance_notes: tuple[str, ...]
     risk_adjusted_score: float
     gate_status: str
     status: str
@@ -175,6 +184,8 @@ class CandidateScore:
     def sort_key(self) -> tuple[float, ...]:
         stress_delta = self.stress_delta if self.stress_delta is not None else -99.0
         return (
+            0.0 if self.late_entry_risk else 1.0,
+            1.0 if self.champion_eligible else 0.0,
             self.risk_adjusted_score,
             float(self.positive_folds),
             self.min_fold_delta,
@@ -379,6 +390,8 @@ def score_discovery_candidates(
             ladder=ladder,
             retention_vs_soxx=retention_vs_soxx,
             drawdown_delta_vs_semis=drawdown_delta_vs_semis,
+            late_entry_risk=full.late_entry_risk,
+            champion_eligible=full.champion_eligible,
         )
         gate_status = _gate_status(
             model_key=model_key,
@@ -414,6 +427,19 @@ def score_discovery_candidates(
                 benchmark_ladder=ladder,
                 retention_vs_soxx=retention_vs_soxx,
                 drawdown_delta_vs_semis=drawdown_delta_vs_semis,
+                recent_window_excess_share=full.recent_window_excess_share,
+                late_entry_risk=full.late_entry_risk,
+                late_entry_risk_reason=full.late_entry_risk_reason,
+                portfolio_governance_classification=(
+                    full.portfolio_governance_classification
+                ),
+                champion_eligible=full.champion_eligible,
+                average_semiconductor_exposure=full.average_semiconductor_exposure,
+                peak_semiconductor_exposure=full.peak_semiconductor_exposure,
+                material_semiconductor_exposure_ratio=(
+                    full.material_semiconductor_exposure_ratio
+                ),
+                portfolio_governance_notes=full.portfolio_governance_notes,
                 risk_adjusted_score=risk_adjusted_score,
                 gate_status=gate_status,
                 status=status,
@@ -450,6 +476,8 @@ def _risk_adjusted_score(
     ladder: dict[str, float],
     retention_vs_soxx: float | None,
     drawdown_delta_vs_semis: float | None,
+    late_entry_risk: bool,
+    champion_eligible: bool,
 ) -> float:
     fold_bonus = positive_folds / max(fold_count, 1)
     stress_component = stress_delta if stress_delta is not None else -1.0
@@ -458,6 +486,8 @@ def _risk_adjusted_score(
     )
     retention_component = min(retention_vs_soxx or 0.0, 1.0)
     drawdown_component = max(drawdown_delta_vs_semis or 0.0, 0.0)
+    late_entry_penalty = 1.0 if late_entry_risk else 0.0
+    governance_penalty = 0.75 if not champion_eligible else 0.0
     return (
         full.excess_return
         + min_fold_delta * 2.0
@@ -470,6 +500,8 @@ def _risk_adjusted_score(
         - abs(worst_drawdown) * 2.0
         - full.annualized_volatility * 0.5
         - full.turnover * 0.01
+        - late_entry_penalty
+        - governance_penalty
     )
 
 
@@ -486,6 +518,14 @@ def _gate_status(
 ) -> str:
     if _is_baseline_or_control_model(model_key):
         return "benchmark baseline"
+    if full.late_entry_risk:
+        return full.late_entry_risk_reason or "late-entry risk review"
+    if not full.champion_eligible:
+        return (
+            full.portfolio_governance_notes[0]
+            if full.portfolio_governance_notes
+            else f"{full.portfolio_governance_classification}; not champion eligible"
+        )
     if not (
         model_key.startswith("risk_managed_semiconductor:")
         or model_key.startswith("market_drawdown_circuit_breaker:")
@@ -568,12 +608,20 @@ def render_discovery_markdown(
             "",
             "| Rank | Universe | Strategy | Full Delta | Stress Delta | "
             "Positive Folds | Min Fold Delta | Avg Fold Delta | Worst DD | "
-            "Risk Score | Gate Status | Trades | Status |",
+            "Governance | Semi Avg/Peak | Recent Risk | Risk Score | "
+            "Gate Status | Trades | Status |",
             "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | "
-            "---: | --- | ---: | --- |",
+            "--- | ---: | --- | ---: | --- | ---: | --- |",
         ]
     )
     for rank, score in enumerate(scores[:25], start=1):
+        recent_risk = (
+            score.late_entry_risk_reason if score.late_entry_risk else "clear"
+        )
+        semi_exposure = (
+            f"{score.average_semiconductor_exposure:.1%}/"
+            f"{score.peak_semiconductor_exposure:.1%}"
+        )
         lines.append(
             f"| {rank} | `{score.universe_id}` | "
             f"{_table_text(score.strategy_name)} (`{score.model_key}`) | "
@@ -583,6 +631,9 @@ def render_discovery_markdown(
             f"{score.min_fold_delta:+.2%} | "
             f"{score.average_fold_delta:+.2%} | "
             f"{score.worst_drawdown:.2%} | "
+            f"{_table_text(score.portfolio_governance_classification)} | "
+            f"{semi_exposure} | "
+            f"{_table_text(recent_risk)} | "
             f"{score.risk_adjusted_score:.2f} | "
             f"{score.gate_status} | "
             f"{score.full.trade_count} | "

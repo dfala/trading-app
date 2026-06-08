@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -47,6 +48,22 @@ LEADERBOARD_WINNER_MODEL_KEY = (
 )
 CASH_ROTATION_GRID_MODEL_KEY = "cash_rotation_model:grid-l126-n1-b020"
 BENCHMARK_RELATIVE_GRID_MODEL_KEY = "benchmark_relative_strength_etf:grid-l126-t21-n1"
+MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY = (
+    "benchmark_relative_strength_etf:grid-l252-t21-n2"
+)
+MACRO_DEFENSIVE_UNIVERSE_ID = "macro-defensive"
+MACRO_DEFENSIVE_UNIVERSE = (
+    "DIA",
+    "QQQ",
+    "IWM",
+    "MDY",
+    "TLT",
+    "GLD",
+    "XLP",
+    "XLU",
+    "XLV",
+    "XLE",
+)
 RISK_MANAGED_SEMICONDUCTOR_MODEL_KEY = (
     "risk_managed_semiconductor:vol-smh-v63-t020-off-cash"
 )
@@ -172,6 +189,44 @@ def make_promoted_runtime(
     )
 
 
+def make_macro_defensive_runtime(
+    *,
+    output_dir=None,
+) -> AlwaysOnPaperRuntime:
+    symbols = (*MACRO_DEFENSIVE_UNIVERSE, "SPY")
+    prices = {symbol: Decimal("100") for symbol in symbols}
+    risk_engine = RiskEngine(
+        RiskConfig(
+            enforce_market_hours=False,
+            us_tradable_universe=frozenset(symbols),
+            tradable_symbols=frozenset(symbols),
+        )
+    )
+    broker = InMemoryPaperBrokerAdapter(starting_cash=Decimal("10000"))
+    service = PaperTradingService(
+        broker=broker,
+        starting_cash=Decimal("10000"),
+        risk_engine=risk_engine,
+    )
+    return AlwaysOnPaperRuntime(
+        service=service,
+        latest_price_fetcher=FixtureLatestPriceFetcher(
+            prices,
+            observed_at=MARKET_OPEN,
+        ),
+        historical_bar_fetcher=FixtureHistoricalBarFetcher(source="runtime-test"),
+        risk_engine=risk_engine,
+        config=AlwaysOnPaperRuntimeConfig(
+            symbols=symbols,
+            output_dir=output_dir or AlwaysOnPaperRuntimeConfig().output_dir,
+            feed=DataFeed.IEX,
+            active_model_key=MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY,
+            active_model_universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+            strategy_schedule=StrategySchedule.MARKET_OPEN,
+        ),
+    )
+
+
 def write_runtime_leaderboard(
     output_dir,
     *model_keys: str,
@@ -213,6 +268,50 @@ def write_runtime_leaderboard(
     learning_dir.mkdir(parents=True, exist_ok=True)
     (learning_dir / "learning-leaderboard.json").write_text(
         leaderboard.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+
+
+def _write_comparison_report(
+    path,
+    *,
+    universe_id: str,
+    start_date: str = "2016-01-04",
+    end_date: str = "2026-05-29",
+    net_total_return: float,
+    excess_return: float,
+    max_drawdown: float,
+    late_entry_risk: bool,
+) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "start_date": start_date,
+                "end_date": end_date,
+                "generated_at": "2026-06-03T13:01:36Z",
+                "benchmark": "SPY",
+                "rows": [
+                    {
+                        "rank": 1,
+                        "model_key": MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY,
+                        "strategy_name": "Benchmark-relative ETF strength",
+                        "universe_id": universe_id,
+                        "net_total_return": net_total_return,
+                        "benchmark_total_return": 3.409933543196922,
+                        "excess_return": excess_return,
+                        "max_drawdown": max_drawdown,
+                        "research_score": 5.554364866742497,
+                        "late_entry_risk": late_entry_risk,
+                        "portfolio_governance_classification": (
+                            "late_entry_review"
+                            if late_entry_risk
+                            else "portfolio_candidate"
+                        ),
+                        "champion_eligible": not late_entry_risk,
+                    }
+                ],
+            },
+        ),
         encoding="utf-8",
     )
 
@@ -399,7 +498,8 @@ def test_market_open_shadow_challenger_tracks_without_broker_orders(
     assert snapshot.shadow_challenger.model_key == SHADOW_CHALLENGER_MODEL_KEY
     assert not snapshot.shadow_challenger.broker_orders_submitted
     assert snapshot.shadow_challenger.orders
-    assert snapshot.model_cards[0].label == "Champion"
+    assert snapshot.model_cards[0].label == "Paper Authority"
+    assert "not whole-portfolio champion eligible" in snapshot.model_cards[0].detail
     assert snapshot.model_cards[1].label == "Shadow Challenger"
     assert (tmp_path / "state" / "latest-shadow-challenger-observation.json").exists()
     assert (tmp_path / "journal" / "shadow-challenger-observations.jsonl").exists()
@@ -532,6 +632,10 @@ def test_shadow_challenger_key_uses_half_risk_exposure() -> None:
 
 def test_research_shadow_keys_build_with_backtested_parameters() -> None:
     benchmark_relative = build_paper_strategy(BENCHMARK_RELATIVE_MODEL_KEY)
+    macro_relative = build_paper_strategy(
+        MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY,
+        universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+    )
     cash_rotation = build_paper_strategy(CASH_ROTATION_MODEL_KEY)
     risk025 = build_paper_strategy(MARKET_DRAWDOWN_RISK025_MODEL_KEY)
     risk_managed = build_paper_strategy(RISK_MANAGED_SEMICONDUCTOR_MODEL_KEY)
@@ -542,6 +646,13 @@ def test_research_shadow_keys_build_with_backtested_parameters() -> None:
     assert benchmark_relative.lookback_days == 126
     assert benchmark_relative.tracking_window_days == 63
     assert benchmark_relative.top_n == 1
+
+    assert macro_relative.strategy_version == "grid-l252-t21-n2"
+    assert macro_relative.universe == MACRO_DEFENSIVE_UNIVERSE
+    assert macro_relative.benchmark == "SPY"
+    assert macro_relative.lookback_days == 252
+    assert macro_relative.tracking_window_days == 21
+    assert macro_relative.top_n == 2
 
     assert cash_rotation.strategy_version == "grid-l63-n1-b040"
     assert cash_rotation.universe == ("QQQ", "XLK", "SMH", "SOXX")
@@ -593,6 +704,124 @@ def test_default_symbols_include_all_shadow_challenger_requirements() -> None:
     )
 
     assert symbols == ("QQQ", "SMH", "SOXX", "SPY", "XLK")
+
+
+def test_default_symbols_use_active_model_universe() -> None:
+    symbols = default_symbols_for_paper_model(
+        MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY,
+        active_model_universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+    )
+
+    assert symbols == (
+        "DIA",
+        "GLD",
+        "IWM",
+        "MDY",
+        "QQQ",
+        "SPY",
+        "TLT",
+        "XLE",
+        "XLP",
+        "XLU",
+        "XLV",
+    )
+
+
+def test_active_model_evidence_uses_configured_universe_for_reused_model_key(
+    tmp_path,
+) -> None:
+    replay_dir = tmp_path / "research" / "replay"
+    replay_dir.mkdir(parents=True)
+    _write_comparison_report(
+        replay_dir
+        / (
+            "learning-cycle-test-semiconductor-champions-"
+            "full-base-comparison.json"
+        ),
+        universe_id="semiconductor-champions",
+        net_total_return=6.148,
+        excess_return=2.738,
+        max_drawdown=-0.3377,
+        late_entry_risk=True,
+    )
+    macro_path = replay_dir / (
+        "learning-cycle-test-macro-defensive-full-base-comparison.json"
+    )
+    _write_comparison_report(
+        macro_path,
+        universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+        net_total_return=4.8349233881822204,
+        excess_return=1.4249898449852982,
+        max_drawdown=-0.18960359157553267,
+        late_entry_risk=False,
+    )
+    _write_comparison_report(
+        replay_dir
+        / (
+            "learning-cycle-test-post-election-2017-macro-defensive-"
+            "full-base-comparison.json"
+        ),
+        universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+        start_date="2017-01-03",
+        end_date="2026-05-29",
+        net_total_return=4.8349233881822204,
+        excess_return=1.9603075307759514,
+        max_drawdown=-0.18960359157553267,
+        late_entry_risk=False,
+    )
+    leaderboard = AutonomousLearningLeaderboard(
+        generated_at=MARKET_OPEN,
+        entry_count=1,
+        entries=(
+            AutonomousLearningLeaderboardEntry(
+                rank=59,
+                first_seen_at=MARKET_OPEN,
+                last_seen_at=MARKET_OPEN,
+                seen_count=15,
+                latest_run_id=(
+                    "learning-cycle-test-post-election-2017"
+                ),
+                hypothesis_ids=("hypothesis-macro",),
+                universe_id=MACRO_DEFENSIVE_UNIVERSE_ID,
+                model_key=MACRO_DEFENSIVE_BENCHMARK_RELATIVE_MODEL_KEY,
+                strategy_name="Benchmark-relative ETF strength",
+                full_delta=1.9603075307759514,
+                net_total_return=None,
+                benchmark_total_return=None,
+                stress_delta=1.341505314740166,
+                min_fold_delta=0.0577611678761325,
+                average_fold_delta=0.26949491682533017,
+                worst_drawdown=-0.18960359157553267,
+                risk_adjusted_score=2.654072041509985,
+                positive_folds=3,
+                fold_count=3,
+                gate_status="general evidence only",
+                status="all folds positive",
+            ),
+        ),
+        summary="test macro leaderboard",
+    )
+    learning_dir = tmp_path / "runtime" / "learning"
+    learning_dir.mkdir(parents=True)
+    (learning_dir / "learning-leaderboard.json").write_text(
+        leaderboard.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
+    runtime = make_macro_defensive_runtime(output_dir=tmp_path / "runtime")
+
+    snapshot = runtime.dashboard_snapshot(as_of=MARKET_OPEN)
+    evidence = snapshot.model_cards[0].evidence
+
+    assert snapshot.model_cards[0].label == "Champion"
+    assert runtime.strategy.universe == MACRO_DEFENSIVE_UNIVERSE
+    assert evidence is not None
+    assert evidence.source_report == str(macro_path)
+    assert evidence.universe_id == MACRO_DEFENSIVE_UNIVERSE_ID
+    assert evidence.net_total_return == pytest.approx(4.8349233881822204)
+    assert evidence.worst_drawdown == pytest.approx(-0.18960359157553267)
+    assert evidence.late_entry_risk is False
+    assert evidence.champion_eligible is True
+    assert evidence.portfolio_governance_classification == "portfolio_candidate"
 
 
 def test_market_open_stale_prices_do_not_consume_daily_attempt(tmp_path) -> None:

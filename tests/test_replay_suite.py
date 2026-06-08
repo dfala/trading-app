@@ -96,7 +96,10 @@ def test_replay_strategy_comparison_ranks_by_delta_and_writes_reports(tmp_path) 
     assert len(results) == len(report.rows)
     assert report.rows
     assert report.rows[0].rank == 1
-    assert report.champion_model_key == report.rows[0].model_key
+    champion_row = next(row for row in report.rows if row.champion_eligible)
+    assert report.champion_model_key == champion_row.model_key
+    if report.rows[0].model_key != champion_row.model_key:
+        assert not report.rows[0].champion_eligible
     assert [row.excess_return for row in report.rows] == sorted(
         (row.excess_return for row in report.rows),
         reverse=True,

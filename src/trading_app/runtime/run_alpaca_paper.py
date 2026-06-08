@@ -52,6 +52,14 @@ def main(argv: list[str] | None = None) -> int:
         default=AlwaysOnPaperRuntimeConfig().active_model_key,
     )
     parser.add_argument(
+        "--active-model-universe-id",
+        default=AlwaysOnPaperRuntimeConfig().active_model_universe_id or "",
+        help=(
+            "Optional discovery universe id for active model keys that exist "
+            "in multiple universes."
+        ),
+    )
+    parser.add_argument(
         "--shadow-challenger-model-key",
         default=AlwaysOnPaperRuntimeConfig().shadow_challenger_model_key,
     )
@@ -111,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         args.symbols,
         default=default_symbols_for_paper_model(
             args.active_model_key,
+            active_model_universe_id=args.active_model_universe_id or None,
             shadow_challenger_model_key=args.shadow_challenger_model_key,
             shadow_challenger_model_keys=shadow_challenger_model_keys,
             leaderboard_path=Path(args.output_dir)
@@ -126,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         feed=DataFeed(args.feed.upper()),
         output_dir=Path(args.output_dir),
         active_model_key=args.active_model_key,
+        active_model_universe_id=args.active_model_universe_id or None,
         shadow_challenger_model_key=args.shadow_challenger_model_key,
         shadow_challenger_model_keys=shadow_challenger_model_keys,
         strategy_schedule=StrategySchedule(args.strategy_schedule),
@@ -176,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             preferred_port=args.dashboard_port,
             snapshot_provider=runtime.dashboard_snapshot_for_api,
             control_handler=runtime.apply_control,
+            live_sandbox_control_handler=runtime.apply_live_sandbox_control,
             health_provider=runtime.health_report,
             dashboard_redirect_url=args.dashboard_redirect_url or None,
             auto_increment=args.dashboard_port_auto_increment,
@@ -215,6 +226,7 @@ def create_dashboard_server_with_port_fallback(
     snapshot_provider,
     control_handler,
     health_provider,
+    live_sandbox_control_handler=None,
     dashboard_redirect_url: str | None = None,
     auto_increment: bool = False,
 ):
@@ -228,6 +240,7 @@ def create_dashboard_server_with_port_fallback(
                 port,
                 snapshot_provider=snapshot_provider,
                 control_handler=control_handler,
+                live_sandbox_control_handler=live_sandbox_control_handler,
                 health_provider=health_provider,
                 dashboard_redirect_url=dashboard_redirect_url,
             )

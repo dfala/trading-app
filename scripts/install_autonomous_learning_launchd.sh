@@ -251,6 +251,7 @@ xml_escape() {
   <string>${LABEL}</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/bin/bash</string>
     <string>$(xml_escape "${LAUNCHD_WRAPPER}")</string>
   </array>
   <key>RunAtLoad</key>

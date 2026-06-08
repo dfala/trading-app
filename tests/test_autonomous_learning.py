@@ -15,6 +15,9 @@ from trading_app.learning.autonomous import (
     AutonomousLearningLeaderboard,
     AutonomousLearningLeaderboardEntry,
     _autonomous_catalog,
+    _candidate_is_pilot_eligible,
+    _candidate_is_promotion_qualified,
+    _candidate_passes_shadow_gate,
     _filtered_catalog,
     _limited_catalog,
     render_autonomous_learning_cycle_markdown,
@@ -112,7 +115,7 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert run.completed_report_count == 3
     assert run.manual_approval_required
     assert run.active_model_unchanged
-    assert run.recommended_challenger_model_key
+    assert run.recommended_challenger_model_key is None
     assert run.research_fingerprint
     assert not run.tuning_mode
     assert run.shadow_arena is not None
@@ -123,10 +126,8 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert run.leaderboard is not None
     assert run.leaderboard.entries
     assert run.candidate_readiness is not None
-    assert run.candidate_readiness.pilot_status in {
-        "manual_pilot_review_eligible",
-        "research_only",
-    }
+    assert run.candidate_readiness.pilot_status == "research_only"
+    assert any(candidate.late_entry_risk for candidate in run.top_candidates)
     assert run.top_candidates[0].manual_approval_required
     assert "cannot grant paper or live trading authority" in markdown
     assert "Shadow Arena" in markdown
@@ -273,6 +274,62 @@ def test_leaderboard_merge_drops_stale_baseline_control_entries(tmp_path) -> Non
     assert markdown_path.exists()
 
 
+def test_late_entry_risk_blocks_candidate_authority_gates() -> None:
+    candidate = AutonomousLearningCandidate(
+        rank=1,
+        universe_id="semiconductor-champions",
+        model_key="market_drawdown_circuit_breaker:top-semi-l126-any-dd10-risk0-cash",
+        strategy_name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
+        full_delta=9.0,
+        stress_delta=8.0,
+        min_fold_delta=0.2,
+        average_fold_delta=1.0,
+        worst_drawdown=-0.25,
+        risk_adjusted_score=12.0,
+        positive_folds=3,
+        fold_count=3,
+        gate_status="late-entry risk review",
+        status="all folds positive",
+        benchmark_ladder={"QQQ": 1.0, "XLK": 1.0},
+        late_entry_risk=True,
+        late_entry_risk_reason=(
+            "Latest 63 trading days account for 51.5% of full-period excess return."
+        ),
+    )
+
+    assert not _candidate_is_promotion_qualified(candidate)
+    assert not _candidate_is_pilot_eligible(candidate)
+    assert not _candidate_passes_shadow_gate(candidate)
+
+
+def test_sector_sleeve_blocks_authority_but_can_shadow() -> None:
+    candidate = AutonomousLearningCandidate(
+        rank=1,
+        universe_id="liquid-risk-on",
+        model_key="risk_managed_semiconductor:vol-smh-v63-t020-off-cash",
+        strategy_name="Risk Managed Semiconductor",
+        full_delta=6.0,
+        stress_delta=5.0,
+        min_fold_delta=0.2,
+        average_fold_delta=1.0,
+        worst_drawdown=-0.25,
+        risk_adjusted_score=8.0,
+        positive_folds=3,
+        fold_count=3,
+        gate_status="sector sleeve only",
+        status="all folds positive",
+        benchmark_ladder={"QQQ": 1.0, "XLK": 1.0},
+        portfolio_governance_classification="sector_sleeve",
+        champion_eligible=False,
+        average_semiconductor_exposure=0.75,
+        peak_semiconductor_exposure=1.0,
+    )
+
+    assert not _candidate_is_promotion_qualified(candidate)
+    assert not _candidate_is_pilot_eligible(candidate)
+    assert _candidate_passes_shadow_gate(candidate)
+
+
 def test_autonomous_cycle_records_blocked_state_when_data_is_missing(tmp_path) -> None:
     run = AutonomousLearningCycleRunner().run(
         AutonomousLearningCycleConfig(
@@ -393,6 +450,66 @@ def test_discovery_scoring_excludes_baseline_and_control_rows() -> None:
     assert scores[0].gate_status == "general evidence only"
 
 
+def test_discovery_scoring_marks_late_entry_risk() -> None:
+    reason = (
+        "Latest 63 trading days account for 51.5% of full-period excess return."
+    )
+    full_report = _report(
+        run_id="full",
+        rows=(
+            _comparison_row(
+                rank=1,
+                model_key=(
+                    "market_drawdown_circuit_breaker:"
+                    "top-semi-l126-any-dd10-risk0-cash"
+                ),
+                strategy_name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
+                net_total_return=10.0,
+                excess_return=9.0,
+                late_entry_risk=True,
+                late_entry_risk_reason=reason,
+                recent_window_excess_share={"63d": 0.515},
+            ),
+        ),
+    )
+    fold_report = _report(
+        run_id="fold-a",
+        rows=(
+            _comparison_row(
+                rank=1,
+                model_key=(
+                    "market_drawdown_circuit_breaker:"
+                    "top-semi-l126-any-dd10-risk0-cash"
+                ),
+                strategy_name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
+                net_total_return=0.5,
+                excess_return=0.2,
+            ),
+        ),
+    )
+
+    scores = score_discovery_candidates(
+        [
+            DiscoveryRun(
+                universe_id="semiconductor-champions",
+                period_id="full",
+                cost_label="base",
+                report=full_report,
+            ),
+            DiscoveryRun(
+                universe_id="semiconductor-champions",
+                period_id="fold-a",
+                cost_label="base",
+                report=fold_report,
+            ),
+        ],
+        fold_ids=("fold-a",),
+    )
+
+    assert scores[0].late_entry_risk
+    assert scores[0].gate_status == reason
+
+
 def _report(
     *,
     run_id: str,
@@ -417,6 +534,9 @@ def _comparison_row(
     strategy_name: str,
     net_total_return: float,
     excess_return: float,
+    late_entry_risk: bool = False,
+    late_entry_risk_reason: str | None = None,
+    recent_window_excess_share: dict[str, float] | None = None,
 ) -> ReplayComparisonRow:
     return ReplayComparisonRow(
         rank=rank,
@@ -433,4 +553,7 @@ def _comparison_row(
         decision_count=6,
         leakage_passed=True,
         research_score=excess_return,
+        recent_window_excess_share=recent_window_excess_share or {},
+        late_entry_risk=late_entry_risk,
+        late_entry_risk_reason=late_entry_risk_reason,
     )

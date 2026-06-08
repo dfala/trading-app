@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { POST as postControl } from "@/app/api/control/route";
 import { GET as getHealth } from "@/app/api/health/route";
+import { GET as getLiveSandbox } from "@/app/api/live-sandbox/route";
+import { POST as postLiveSandboxControl } from "@/app/api/live-sandbox/control/route";
 import { GET as getModelPerformance } from "@/app/api/model-performance/route";
 import { GET as getSnapshot } from "@/app/api/snapshot/route";
 
@@ -84,6 +86,41 @@ describe("Next.js backend proxy routes", () => {
       method: "POST",
       cache: "no-store",
       body: JSON.stringify({ action: "pause_runtime" }),
+    });
+  });
+
+  it("proxies live sandbox status and controls", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ status: "kill_switch", accepted: true }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new Request("http://localhost/api/live-sandbox/control", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "enable_live_kill_switch" }),
+    });
+
+    const statusResponse = await getLiveSandbox();
+    const controlResponse = await postLiveSandboxControl(request);
+    const [statusUrl] = fetchMock.mock.calls[0] as unknown as [
+      URL,
+      RequestInit,
+    ];
+    const [controlUrl, controlInit] = fetchMock.mock.calls[1] as unknown as [
+      URL,
+      RequestInit,
+    ];
+
+    expect(statusResponse.status).toBe(200);
+    expect(controlResponse.status).toBe(200);
+    expect(String(statusUrl)).toBe("http://127.0.0.1:8765/api/live-sandbox");
+    expect(String(controlUrl)).toBe(
+      "http://127.0.0.1:8765/api/live-sandbox/control",
+    );
+    expect(controlInit).toMatchObject({
+      method: "POST",
+      cache: "no-store",
+      body: JSON.stringify({ action: "enable_live_kill_switch" }),
     });
   });
 

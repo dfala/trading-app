@@ -4,6 +4,7 @@ import json
 from http import HTTPStatus
 from http.client import HTTPConnection
 from threading import Thread
+from types import SimpleNamespace
 
 import pytest
 
@@ -178,6 +179,37 @@ def test_dashboard_model_performance_route(monkeypatch: pytest.MonkeyPatch) -> N
     assert content_type.startswith("application/json")
     assert payload["model_key"] == "test_strategy:v1"
     assert payload["universe_id"] == "semis"
+
+
+def test_dashboard_live_sandbox_routes_snapshot_and_control() -> None:
+    control_requests = []
+
+    def snapshot_provider():
+        return SimpleNamespace(live_sandbox={"status": "kill_switch"})
+
+    def control_handler(request):
+        control_requests.append(request)
+        return {"accepted": True, "message": request.action.value}
+
+    snapshot_status, snapshot_type, snapshot_body = dashboard_response(
+        "/api/live-sandbox",
+        snapshot_provider=snapshot_provider,
+    )
+    control_status, control_type, control_body = dashboard_response(
+        "/api/live-sandbox/control",
+        method="POST",
+        body=json.dumps({"action": "enable_live_kill_switch"}),
+        snapshot_provider=snapshot_provider,
+        live_sandbox_control_handler=control_handler,
+    )
+
+    assert snapshot_status == HTTPStatus.OK
+    assert snapshot_type.startswith("application/json")
+    assert json.loads(snapshot_body)["status"] == "kill_switch"
+    assert control_status == HTTPStatus.OK
+    assert control_type.startswith("application/json")
+    assert json.loads(control_body)["message"] == "enable_live_kill_switch"
+    assert control_requests[0].requested_by == "local-dashboard"
 
 
 def test_model_strategy_profile_explains_catalog_definition() -> None:

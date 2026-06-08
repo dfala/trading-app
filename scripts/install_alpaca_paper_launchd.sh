@@ -21,10 +21,12 @@ MAX_PAPER_SEMICONDUCTOR_ALLOCATION=""
 INITIAL_PAPER_DEPLOYMENT_ALLOCATION=""
 PAPER_EPOCH_STARTED_AT=""
 ACTIVE_MODEL_KEY="monthly_sector_momentum:1.0.0"
+ACTIVE_MODEL_UNIVERSE_ID=""
 SHADOW_CHALLENGER_MODEL_KEY=""
 SHADOW_CHALLENGER_MODEL_KEYS=""
 STRATEGY_SCHEDULE="daily_close"
 SYMBOLS=""
+LIVE_SANDBOX_ENABLED="false"
 START_SERVICE="yes"
 
 usage() {
@@ -53,6 +55,8 @@ Options:
   --paper-epoch-started-at RFC3339
                          Ignore broker orders submitted before this timestamp.
   --active-model-key KEY  Paper model key. Default: monthly_sector_momentum:1.0.0
+  --active-model-universe-id ID
+                         Optional universe id for active model keys reused across universes.
   --shadow-challenger-model-key KEY
                          Optional shadow-only challenger model key.
   --shadow-challenger-model-keys CSV
@@ -60,6 +64,8 @@ Options:
   --strategy-schedule SCHEDULE
                          Paper schedule: daily_close or market_open. Default: daily_close
   --symbols CSV          Optional comma-separated symbol override.
+  --live-sandbox-enabled yes|no
+                         Enable the bounded $100 live sandbox. Default: false
   --no-start             Write the plist but do not bootstrap/kickstart it.
   -h, --help             Show this help.
 
@@ -122,6 +128,10 @@ while (($#)); do
       ACTIVE_MODEL_KEY="$2"
       shift 2
       ;;
+    --active-model-universe-id)
+      ACTIVE_MODEL_UNIVERSE_ID="$2"
+      shift 2
+      ;;
     --shadow-challenger-model-key)
       SHADOW_CHALLENGER_MODEL_KEY="$2"
       shift 2
@@ -136,6 +146,10 @@ while (($#)); do
       ;;
     --symbols)
       SYMBOLS="$2"
+      shift 2
+      ;;
+    --live-sandbox-enabled)
+      LIVE_SANDBOX_ENABLED="$2"
       shift 2
       ;;
     --no-start)
@@ -227,10 +241,12 @@ MAX_PAPER_SEMICONDUCTOR_ALLOCATION="${MAX_PAPER_SEMICONDUCTOR_ALLOCATION}"
 INITIAL_PAPER_DEPLOYMENT_ALLOCATION="${INITIAL_PAPER_DEPLOYMENT_ALLOCATION}"
 PAPER_EPOCH_STARTED_AT="${PAPER_EPOCH_STARTED_AT}"
 ACTIVE_MODEL_KEY="${ACTIVE_MODEL_KEY}"
+ACTIVE_MODEL_UNIVERSE_ID="${ACTIVE_MODEL_UNIVERSE_ID}"
 SHADOW_CHALLENGER_MODEL_KEY="${SHADOW_CHALLENGER_MODEL_KEY}"
 SHADOW_CHALLENGER_MODEL_KEYS="${SHADOW_CHALLENGER_MODEL_KEYS}"
 STRATEGY_SCHEDULE="${STRATEGY_SCHEDULE}"
 SYMBOLS="${SYMBOLS}"
+LIVE_SANDBOX_ENABLED="${LIVE_SANDBOX_ENABLED}"
 
 set -a
 . "\${ENV_FILE}"
@@ -244,10 +260,13 @@ MAX_PAPER_SEMICONDUCTOR_ALLOCATION="\${TRADING_APP_MAX_PAPER_SEMICONDUCTOR_ALLOC
 INITIAL_PAPER_DEPLOYMENT_ALLOCATION="\${TRADING_APP_INITIAL_PAPER_DEPLOYMENT_ALLOCATION:-\${INITIAL_PAPER_DEPLOYMENT_ALLOCATION}}"
 PAPER_EPOCH_STARTED_AT="\${TRADING_APP_PAPER_EPOCH_STARTED_AT:-\${PAPER_EPOCH_STARTED_AT}}"
 ACTIVE_MODEL_KEY="\${TRADING_APP_ACTIVE_MODEL_KEY:-\${ACTIVE_MODEL_KEY}}"
+ACTIVE_MODEL_UNIVERSE_ID="\${TRADING_APP_ACTIVE_MODEL_UNIVERSE_ID:-\${ACTIVE_MODEL_UNIVERSE_ID}}"
 SHADOW_CHALLENGER_MODEL_KEY="\${TRADING_APP_SHADOW_CHALLENGER_MODEL_KEY:-\${SHADOW_CHALLENGER_MODEL_KEY}}"
 SHADOW_CHALLENGER_MODEL_KEYS="\${TRADING_APP_SHADOW_CHALLENGER_MODEL_KEYS:-\${SHADOW_CHALLENGER_MODEL_KEYS}}"
 STRATEGY_SCHEDULE="\${TRADING_APP_STRATEGY_SCHEDULE:-\${STRATEGY_SCHEDULE}}"
 SYMBOLS="\${TRADING_APP_SYMBOLS:-\${SYMBOLS}}"
+LIVE_SANDBOX_ENABLED="\${TRADING_APP_LIVE_SANDBOX_ENABLED:-\${LIVE_SANDBOX_ENABLED}}"
+export TRADING_APP_LIVE_SANDBOX_ENABLED="\${LIVE_SANDBOX_ENABLED}"
 
 if command -v lsof >/dev/null 2>&1; then
   listeners="\$(lsof -tiTCP:"\${DASHBOARD_PORT}" -sTCP:LISTEN || true)"
@@ -285,6 +304,8 @@ cmd=(
   "\${INITIAL_PAPER_DEPLOYMENT_ALLOCATION}"
   "--active-model-key"
   "\${ACTIVE_MODEL_KEY}"
+  "--active-model-universe-id"
+  "\${ACTIVE_MODEL_UNIVERSE_ID}"
   "--strategy-schedule"
   "\${STRATEGY_SCHEDULE}"
   "--monitor-only-dry-run-first"
@@ -309,12 +330,13 @@ fi
 cd /
 echo "Starting Alpaca paper backend/API on http://\${DASHBOARD_HOST}:\${DASHBOARD_PORT}/"
 echo "Redirecting browser dashboard routes to \${OPERATOR_DASHBOARD_URL}"
+echo "Live sandbox enabled: \${LIVE_SANDBOX_ENABLED}"
 exec "\${cmd[@]}"
 EOF
 } > "${LAUNCHD_WRAPPER}"
 chmod 700 "${LAUNCHD_WRAPPER}"
 
-program_args=("${LAUNCHD_WRAPPER}")
+program_args=("/bin/bash" "${LAUNCHD_WRAPPER}")
 
 xml_escape() {
   local value="$1"

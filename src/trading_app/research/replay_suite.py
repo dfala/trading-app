@@ -18,6 +18,16 @@ from trading_app.research.replay import (
     ReplayRunResult,
     StrategyReplayPolicy,
 )
+from trading_app.research.portfolio_governance import (
+    PortfolioGovernanceClassification,
+    build_portfolio_governance_profile,
+)
+from trading_app.research.recent_windows import (
+    assess_recent_window_concentration,
+    late_entry_risk_summary,
+    recent_window_map,
+    return_curve_points_from_equity_curve,
+)
 from trading_app.schemas import DailyBar, TradingModel
 from trading_app.strategies import (
     SECTOR_ETF_UNIVERSE,
@@ -50,6 +60,19 @@ class ReplayComparisonRow(TradingModel):
     decision_count: int = Field(ge=0)
     leakage_passed: bool
     research_score: float
+    recent_window_excess_return: dict[str, float] = Field(default_factory=dict)
+    recent_window_excess_share: dict[str, float] = Field(default_factory=dict)
+    late_entry_risk: bool = False
+    late_entry_risk_reason: str | None = None
+    portfolio_governance_classification: str = (
+        PortfolioGovernanceClassification.UNKNOWN.value
+    )
+    champion_eligible: bool = True
+    average_semiconductor_exposure: float = 0.0
+    peak_semiconductor_exposure: float = 0.0
+    material_semiconductor_exposure_ratio: float = 0.0
+    material_semiconductor_exposure_days: int = Field(default=0, ge=0)
+    portfolio_governance_notes: tuple[str, ...] = ()
 
 
 class ReplayComparisonSkipped(TradingModel):
@@ -131,6 +154,7 @@ class ReplayStrategyComparisonRunner:
                 )
 
         ranked_rows = _rank_results(results, catalog)
+        champion_row = _champion_eligible_row(ranked_rows)
         report = ReplayComparisonReport(
             run_id=config.run_id,
             generated_at=results[0].generated_at
@@ -141,8 +165,10 @@ class ReplayStrategyComparisonRunner:
             benchmark=config.benchmark,
             rows=ranked_rows,
             skipped=tuple(skipped),
-            champion_model_key=ranked_rows[0].model_key if ranked_rows else None,
-            summary=_comparison_summary(ranked_rows, skipped),
+            champion_model_key=(
+                champion_row.model_key if champion_row is not None else None
+            ),
+            summary=_comparison_summary(ranked_rows, skipped, champion_row),
         )
         return report, tuple(results)
 
@@ -364,11 +390,17 @@ def render_replay_comparison_markdown_report(
         "## Ranking",
         "",
         "| Rank | Strategy | Net | Benchmark | Delta vs Benchmark | Max DD | "
-        "Vol | Turnover | Trades | Leakage |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "Vol | Governance | Semi Exp | Recent Risk | Turnover | Trades | Leakage |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- | "
+        "---: | ---: | --- |",
     ]
     for row in report.rows:
         leakage = "pass" if row.leakage_passed else "fail"
+        recent_risk = row.late_entry_risk_reason if row.late_entry_risk else "clear"
+        semi_exposure = (
+            f"{row.average_semiconductor_exposure:.1%}/"
+            f"{row.peak_semiconductor_exposure:.1%}"
+        )
         lines.append(
             f"| {row.rank} | {_table_text(row.strategy_name)} "
             f"(`{row.model_key}`) | "
@@ -377,6 +409,9 @@ def render_replay_comparison_markdown_report(
             f"{row.excess_return:+.2%} | "
             f"{row.max_drawdown:.2%} | "
             f"{row.annualized_volatility:.2%} | "
+            f"{_table_text(row.portfolio_governance_classification)} | "
+            f"{semi_exposure} | "
+            f"{_table_text(recent_risk)} | "
             f"{row.turnover:.2f} | "
             f"{row.trade_count} | "
             f"{leakage} |"
@@ -493,6 +528,20 @@ def _rank_results(
     rows: list[ReplayComparisonRow] = []
     for rank, result in enumerate(sortable, start=1):
         definition = definitions.get(result.policy_key)
+        recent_assessments = assess_recent_window_concentration(
+            return_curve_points_from_equity_curve(
+                result.equity_curve,
+                starting_cash=result.config.starting_cash,
+            )
+        )
+        recent_summary = late_entry_risk_summary(recent_assessments)
+        governance = build_portfolio_governance_profile(
+            model_key=result.policy_key,
+            symbol_universe=result.config.symbol_universe,
+            decisions=result.decisions,
+            late_entry_risk=recent_summary is not None,
+            late_entry_risk_reason=recent_summary,
+        )
         rows.append(
             ReplayComparisonRow(
                 rank=rank,
@@ -511,6 +560,27 @@ def _rank_results(
                 decision_count=result.metrics.decision_count,
                 leakage_passed=result.leakage_audit.passed,
                 research_score=_research_score(result),
+                recent_window_excess_return=recent_window_map(
+                    recent_assessments,
+                    "excess_return_delta",
+                ),
+                recent_window_excess_share=recent_window_map(
+                    recent_assessments,
+                    "excess_contribution_share",
+                ),
+                late_entry_risk=recent_summary is not None,
+                late_entry_risk_reason=recent_summary,
+                portfolio_governance_classification=governance.classification.value,
+                champion_eligible=governance.champion_eligible,
+                average_semiconductor_exposure=governance.average_semiconductor_exposure,
+                peak_semiconductor_exposure=governance.peak_semiconductor_exposure,
+                material_semiconductor_exposure_ratio=(
+                    governance.material_semiconductor_exposure_ratio
+                ),
+                material_semiconductor_exposure_days=(
+                    governance.material_semiconductor_exposure_days
+                ),
+                portfolio_governance_notes=governance.notes,
             )
         )
     return tuple(rows)
@@ -529,17 +599,44 @@ def _research_score(result: ReplayRunResult) -> float:
 def _comparison_summary(
     rows: tuple[ReplayComparisonRow, ...],
     skipped: list[ReplayComparisonSkipped],
+    champion_row: ReplayComparisonRow | None = None,
 ) -> str:
     if not rows:
         return f"No strategies completed replay; skipped {len(skipped)} strategy(s)."
-    champion = rows[0]
-    delta = champion.excess_return
+    top_row = rows[0]
+    champion = champion_row or _champion_eligible_row(rows)
+    delta = top_row.excess_return
     direction = "beat" if delta >= 0 else "trailed"
+    if champion is None:
+        return (
+            f"Top raw strategy {top_row.model_key} {direction} the benchmark by "
+            f"{delta:+.2%}, but no completed strategy is champion-eligible. "
+            f"{sum(1 for row in rows if row.excess_return > 0)} of "
+            f"{len(rows)} completed strategy replay(s) beat the benchmark."
+        )
+    champion_delta = champion.excess_return
+    champion_direction = "beat" if champion_delta >= 0 else "trailed"
+    if champion.model_key != top_row.model_key:
+        return (
+            f"Top raw strategy {top_row.model_key} {direction} the benchmark by "
+            f"{delta:+.2%} but is classified as "
+            f"{top_row.portfolio_governance_classification}. "
+            f"Champion-eligible leader {champion.model_key} "
+            f"{champion_direction} the benchmark by {champion_delta:+.2%}. "
+            f"{sum(1 for row in rows if row.excess_return > 0)} of "
+            f"{len(rows)} completed strategy replay(s) beat the benchmark."
+        )
     return (
-        f"Top strategy {champion.model_key} {direction} the benchmark by "
+        f"Champion-eligible leader {champion.model_key} {direction} the benchmark by "
         f"{delta:+.2%}. {sum(1 for row in rows if row.excess_return > 0)} of "
         f"{len(rows)} completed strategy replay(s) beat the benchmark."
     )
+
+
+def _champion_eligible_row(
+    rows: tuple[ReplayComparisonRow, ...],
+) -> ReplayComparisonRow | None:
+    return next((row for row in rows if row.champion_eligible), None)
 
 
 def _require_generated_at(generated_at: datetime | None) -> datetime:

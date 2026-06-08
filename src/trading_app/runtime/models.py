@@ -793,3 +793,4 @@ class RuntimeSnapshot(TradingModel):
     last_control_result: OperatorControlResult | None = None
     alerts: tuple[RuntimeAlert, ...] = ()
     health_report: RuntimeHealthReport | None = None
+    live_sandbox: Any | None = None

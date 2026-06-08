@@ -10,6 +10,8 @@ import type {
   DashboardModelEvidence,
   DashboardSnapshot,
   Fill,
+  LiveSandboxControlAction,
+  LiveSandboxControlResult,
   ModelComparison,
   ModelPerformanceResponse,
   ModelStrategyProfile,
@@ -33,6 +35,7 @@ type ScreenKey =
   | "home"
   | "strategies"
   | "paper"
+  | "live"
   | "risk"
   | "research"
   | "reports"
@@ -65,6 +68,14 @@ type DashboardClientProps = {
   refreshIntervalMs?: number;
 };
 
+type LiveSandboxHistoryPoint = {
+  asOf: string;
+  timestamp: number;
+  equity: number;
+  deployed: number;
+  cash: number;
+};
+
 type ModelSelection = {
   modelKey: string;
   universeId?: string;
@@ -72,6 +83,7 @@ type ModelSelection = {
 
 const CONTROL_REASON = "Next.js operator dashboard";
 const NAV_ITEMS = [
+  ["live", "Live", "$"],
   ["overview", "Overview", "O"],
   ["home", "Home", "•"],
   ["strategies", "Models", "M"],
@@ -87,6 +99,7 @@ const SCREEN_TITLES: Record<ScreenKey, string> = {
   home: "Command Center",
   strategies: "Models",
   paper: "Paper Trading",
+  live: "Live Sandbox",
   risk: "Risk",
   research: "Research Lab",
   reports: "Reports",
@@ -100,6 +113,7 @@ const GOTO_KEYS: Record<string, ScreenKey> = {
   h: "home",
   m: "strategies",
   p: "paper",
+  "$": "live",
   r: "risk",
   l: "research",
   t: "reports",
@@ -122,8 +136,11 @@ export function DashboardClient({
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] =
     useState<OperatorControlAction | null>(null);
+  const [pendingLiveAction, setPendingLiveAction] =
+    useState<LiveSandboxControlAction | null>(null);
   const [controlMessage, setControlMessage] = useState<string | null>(null);
-  const [activeScreen, setActiveScreen] = useState<ScreenKey>("overview");
+  const [activeScreen, setActiveScreen] = useState<ScreenKey>("live");
+  const [liveHistory, setLiveHistory] = useState<LiveSandboxHistoryPoint[]>([]);
   const [vocab, setVocab] = useState<"plain" | "technical">("plain");
   const [theme, setTheme] = useState<ThemePref>("system");
   const [tourOpen, setTourOpen] = useState(false);
@@ -335,6 +352,20 @@ export function DashboardClient({
   }, [autoRefresh, initialSnapshot, refreshIntervalMs, refreshSnapshot]);
 
   useEffect(() => {
+    const point = liveSandboxHistoryPoint(snapshot);
+    if (!point) {
+      return;
+    }
+    setLiveHistory((history) => {
+      const next = [
+        ...history.filter((item) => item.timestamp !== point.timestamp),
+        point,
+      ].sort((left, right) => left.timestamp - right.timestamp);
+      return next.slice(-240);
+    });
+  }, [snapshot]);
+
+  useEffect(() => {
     if (
       (activeScreen === "research" || activeScreen === "reports") &&
       replayReports.length === 0 &&
@@ -442,17 +473,21 @@ export function DashboardClient({
     setCommandOpen(false);
   }
 
-  function selectModel(row: OverviewRow) {
-    const selection: ModelSelection = {
-      modelKey: row.modelKey,
-      universeId: row.universeId,
-    };
+  function selectModelSelection(selection: ModelSelection) {
     setSelectedModel(selection);
     setActiveScreen("model");
     window.history.replaceState(null, "", modelSelectionHash(selection));
     setWhatsThisOpen(false);
     setCommandOpen(false);
     void loadModelPerformance(selection);
+  }
+
+  function selectModel(row: OverviewRow) {
+    const selection: ModelSelection = {
+      modelKey: row.modelKey,
+      universeId: row.universeId,
+    };
+    selectModelSelection(selection);
   }
 
   function setVocabMode(next: "plain" | "technical") {
@@ -520,6 +555,37 @@ export function DashboardClient({
       setControlMessage(message);
     } finally {
       setPendingAction(null);
+    }
+  }
+
+  async function sendLiveSandboxControl(action: LiveSandboxControlAction) {
+    setPendingLiveAction(action);
+    setControlMessage(null);
+    try {
+      const response = await fetch("/api/live-sandbox/control", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action,
+          requested_at: new Date().toISOString(),
+          requested_by: "next-dashboard",
+          reason: "Next.js live sandbox control",
+        }),
+      });
+      const result = (await response.json()) as LiveSandboxControlResult;
+      if (!response.ok) {
+        throw new Error(result.error ?? `Live control failed with ${response.status}`);
+      }
+      setControlMessage(result.message ?? "Live sandbox control accepted.");
+      await refreshSnapshot();
+    } catch (controlError) {
+      const message =
+        controlError instanceof Error
+          ? controlError.message
+          : "Live sandbox control failed";
+      setControlMessage(message);
+    } finally {
+      setPendingLiveAction(null);
     }
   }
 
@@ -593,6 +659,13 @@ export function DashboardClient({
             active={activeScreen === "strategies"}
           />
           <PaperScreen snapshot={snapshot} active={activeScreen === "paper"} />
+          <LiveSandboxScreen
+            snapshot={snapshot}
+            liveHistory={liveHistory}
+            pendingAction={pendingLiveAction}
+            onControl={sendLiveSandboxControl}
+            active={activeScreen === "live"}
+          />
           <RiskScreen
             snapshot={snapshot}
             pendingAction={pendingAction}
@@ -620,8 +693,16 @@ export function DashboardClient({
             onRefresh={() =>
               void loadReplayReports(selectedReplayReportId)
             }
-            onOpenReport={(id) => {
-              void loadReplayReports(id);
+            onOpenReport={(row) => {
+              const modelKey = modelKeyFromReportStrategy(row.strategy);
+              if (modelKey) {
+                selectModelSelection({
+                  modelKey,
+                  universeId: row.universeId,
+                });
+                return;
+              }
+              void loadReplayReports(row.id);
               selectScreen("research");
             }}
             active={activeScreen === "reports"}
@@ -913,6 +994,19 @@ type OverviewRow = {
   note?: string;
 };
 
+function isActivePaperModelCard(card: DashboardModelCard): boolean {
+  return isActivePaperModelLabel(card.label);
+}
+
+function isActivePaperModelLabel(label: string | undefined): boolean {
+  const normalized = (label ?? "").trim().toLowerCase();
+  return (
+    normalized === "champion" ||
+    normalized === "paper authority" ||
+    normalized === "active paper model"
+  );
+}
+
 function OverviewScreen({
   snapshot,
   active,
@@ -924,11 +1018,11 @@ function OverviewScreen({
   onNavigate: (screen: ScreenKey) => void;
   onOpenModel: (row: OverviewRow) => void;
 }) {
-  const champion =
-    (snapshot?.model_cards ?? []).find((card) => card.label === "Champion") ??
+  const activeModel =
+    (snapshot?.model_cards ?? []).find(isActivePaperModelCard) ??
     (snapshot?.model_cards ?? [])[0];
   const challengers = (snapshot?.model_cards ?? []).filter(
-    (card) => card.label !== "Champion",
+    (card) => !isActivePaperModelCard(card),
   );
   const bestChallenger = challengers.reduce<typeof challengers[number] | undefined>(
     (top, card) => {
@@ -940,10 +1034,10 @@ function OverviewScreen({
   );
 
   const performance = portfolioPerformance(snapshot, "ALL");
-  const championExcess = champion?.evidence?.excess_return ?? null;
-  const championNet = champion?.evidence?.net_total_return ?? null;
-  const championDD = champion?.evidence?.worst_drawdown ?? null;
-  const benchmark = champion?.evidence?.benchmark ?? "SPY";
+  const activeModelExcess = activeModel?.evidence?.excess_return ?? null;
+  const activeModelNet = activeModel?.evidence?.net_total_return ?? null;
+  const activeModelDD = activeModel?.evidence?.worst_drawdown ?? null;
+  const benchmark = activeModel?.evidence?.benchmark ?? "SPY";
 
   const rows = buildOverviewRows(snapshot);
   const queue = snapshot?.autonomous_learning_service;
@@ -957,7 +1051,7 @@ function OverviewScreen({
           <h1>What&apos;s working, in plain English.</h1>
           <p>
             One page that answers: how is the paper portfolio doing, how did
-            the champion beat the market historically, what challengers are
+            the active paper model beat the market historically, what challengers are
             ahead, and what the research worker is testing next.
           </p>
         </div>
@@ -984,32 +1078,32 @@ function OverviewScreen({
         </article>
         <article className="overview-stat">
           <span className="eyebrow">
-            {glossary("Champion beat market by", "excess_return")}
+            {glossary("Paper model beat market by", "excess_return")}
           </span>
           <strong
-            className={`overview-stat__value mono ${signClass(percentValue(championExcess))}`}
+            className={`overview-stat__value mono ${signClass(percentValue(activeModelExcess))}`}
           >
-            {percentValue(championExcess)}
+            {percentValue(activeModelExcess)}
           </strong>
           <span className="overview-stat__delta">
-            backtest {percentValue(championNet)} vs {benchmark}{" "}
+            backtest {percentValue(activeModelNet)} vs {benchmark}{" "}
             {percentValue(
-              champion?.evidence?.benchmark_total_return ?? null,
+              activeModel?.evidence?.benchmark_total_return ?? null,
             )}
           </span>
           <span className="microcopy">
-            How much the live champion model beat the market over its full
+            How much the active paper model beat the market over its full
             historical replay window.
           </span>
         </article>
         <article className="overview-stat">
           <span className="eyebrow">
-            {glossary("Champion's worst drawdown", "max_drawdown")}
+            {glossary("Paper model's worst drawdown", "max_drawdown")}
           </span>
           <strong
-            className={`overview-stat__value mono ${signClass(percentValue(championDD))}`}
+            className={`overview-stat__value mono ${signClass(percentValue(activeModelDD))}`}
           >
-            {percentValue(championDD)}
+            {percentValue(activeModelDD)}
           </strong>
           <span className="overview-stat__delta">
             from peak to trough in backtest
@@ -1022,19 +1116,19 @@ function OverviewScreen({
       </div>
 
       <Surface
-        eyebrow="Champion vs best challenger"
+        eyebrow="Paper authority vs best challenger"
         title="Is something out-performing the live model?"
       >
         <p className="surface__summary">
-          The champion is the model trading paper money right now. The best
+          The paper authority is the model trading paper money right now. The best
           challenger is the candidate the research engine likes most. A big
           positive delta is the engine&apos;s case for promoting it next.
         </p>
-        {champion && bestChallenger ? (
-          <OverviewDuel champion={champion} challenger={bestChallenger} />
+        {activeModel && bestChallenger ? (
+          <OverviewDuel champion={activeModel} challenger={bestChallenger} />
         ) : (
           <Empty>
-            Champion or challenger data not available in the snapshot yet.
+            Paper model or challenger data not available in the snapshot yet.
           </Empty>
         )}
       </Surface>
@@ -1046,7 +1140,7 @@ function OverviewScreen({
       >
         <p className="surface__summary">
           The highest-ranked candidates from the autonomous learning
-          leaderboard, annotated when a row is also the active champion or a
+          leaderboard, annotated when a row is also the active paper model or a
           shadow challenger. Treat this as a research ranking, not a promotion
           queue: models whose edge is concentrated in the latest 21/63 trading
           days still need 3/6/12-month consistency checks before champion review.
@@ -1056,7 +1150,7 @@ function OverviewScreen({
         ) : (
           <OverviewLeaderboard
             rows={rows}
-            champion={champion}
+            champion={activeModel}
             onOpenModel={onOpenModel}
           />
         )}
@@ -1097,6 +1191,9 @@ function OverviewDuel({
   champion: DashboardModelCard;
   challenger: DashboardModelCard;
 }) {
+  const activeLabel = isActivePaperModelCard(champion)
+    ? champion.label
+    : "Champion";
   const cScore = Number(champion.score) || 0;
   const xScore = Number(challenger.score) || 0;
   const total = Math.abs(cScore) + Math.abs(xScore);
@@ -1116,7 +1213,7 @@ function OverviewDuel({
           challengerLeads ? "" : " duel__side--winner"
         }`}
       >
-        <span className="duel__label">{champion.label}</span>
+        <span className="duel__label">{activeLabel}</span>
         <span className="duel__score mono">{formatScore(cScore)}</span>
         <div className="duel__bar">
           <span className="duel__fill duel__fill--left" style={{ width: `${cPct}%` }} />
@@ -1128,7 +1225,7 @@ function OverviewDuel({
       </div>
       <div className="duel__pivot">
         <span className="duel__delta-label">
-          {challengerLeads ? "Challenger leads by" : "Champion leads by"}
+          {challengerLeads ? "Challenger leads by" : `${activeLabel} leads by`}
         </span>
         <span className={`duel__delta mono ${challengerLeads ? "pos" : "neg"}`}>
           {challengerLeads ? "+" : ""}
@@ -1137,7 +1234,7 @@ function OverviewDuel({
         <span className="duel__hint">
           {challengerLeads
             ? "Research-only. Awaiting promotion."
-            : "Champion still ahead."}
+            : `${activeLabel} still ahead.`}
         </span>
       </div>
       <div
@@ -1251,6 +1348,9 @@ function OverviewLeaderboardRow({
   pinned?: boolean;
 }) {
   const isChampion = row.modelKey === championModelKey || row.kind === "champion";
+  const activeBadge = isActivePaperModelLabel(row.label)
+    ? row.label.toUpperCase()
+    : "CHAMPION";
   const rowClass = [
     "reports-table__row",
     isChampion ? "reports-table__row--champion overview-table__champion-row" : "",
@@ -1265,7 +1365,9 @@ function OverviewLeaderboardRow({
       <td className="reports-table__strategy">
         {isChampion ? (
           <span className="reports-table__champion-tag">
-            {pinned ? "CURRENT CHAMPION" : "CHAMPION"}
+            {pinned && activeBadge === "CHAMPION"
+              ? "CURRENT CHAMPION"
+              : activeBadge}
           </span>
         ) : null}
         <button
@@ -1280,7 +1382,7 @@ function OverviewLeaderboardRow({
           <span className="reports-table__sub">{row.universeId}</span>
         ) : null}
       </td>
-      <td>{pinned ? "Champion" : row.label}</td>
+      <td>{row.label}</td>
       <td className={`mono ${signClassFromValue(row.net)}`}>
         {percentValue(row.net)}
       </td>
@@ -1333,6 +1435,7 @@ function ModelPerformanceScreen({
   const benchmark = performance?.benchmark ?? "SPY";
   const points = performance?.points ?? [];
   const metrics = performance?.metrics;
+  const recentWindows = performance?.recent_windows ?? [];
 
   return (
     <section className="screen screen--model" data-screen="model" hidden={!active}>
@@ -1417,9 +1520,27 @@ function ModelPerformanceScreen({
             title="Return curve over time"
             pill={<Pill tone="ai">{performance.data_feed}</Pill>}
           >
+            {performance.late_entry_risk ? (
+              <div
+                className="model-performance-warning"
+                data-field="late-entry-risk"
+              >
+                <span className="eyebrow">Late-entry review</span>
+                <strong>
+                  {performance.late_entry_risk_summary ??
+                    "Recent-window concentration is too high for promotion review."}
+                </strong>
+              </div>
+            ) : null}
             <div className="model-performance-chart-card">
               <ModelPerformanceChart points={points} benchmark={benchmark} />
             </div>
+            {recentWindows.length > 0 ? (
+              <ModelPerformanceRecentWindows
+                windows={recentWindows}
+                benchmark={benchmark}
+              />
+            ) : null}
             <div className="model-performance-meta">
               <KRow
                 label="Universe"
@@ -1485,6 +1606,53 @@ function ModelPerformanceScreen({
         </Surface>
       )}
     </section>
+  );
+}
+
+function ModelPerformanceRecentWindows({
+  windows,
+  benchmark,
+}: {
+  windows: ModelPerformanceResponse["recent_windows"];
+  benchmark: string;
+}) {
+  if (!windows || windows.length === 0) {
+    return null;
+  }
+  return (
+    <div className="model-performance-windows">
+      <div className="model-performance-windows__head">
+        <span className="eyebrow">Recent-window concentration</span>
+        <span>Model vs {benchmark}</span>
+      </div>
+      <div className="model-performance-window-grid">
+        <span>Window</span>
+        <span>Model</span>
+        <span>Excess</span>
+        <span>Share</span>
+        <span>Status</span>
+        {windows.map((window) => (
+          <Fragment key={window.trading_days}>
+            <strong>{window.trading_days}d</strong>
+            <span className={`mono ${signClassFromValue(window.model_return_delta)}`}>
+              {percentValue(window.model_return_delta)}
+            </span>
+            <span className={`mono ${signClassFromValue(window.excess_return_delta)}`}>
+              {percentValue(window.excess_return_delta)}
+            </span>
+            <span
+              className={`mono ${window.late_entry_risk ? "warn" : ""}`}
+              title={`${window.start_date} to ${window.end_date}`}
+            >
+              {percentValue(window.excess_contribution_share)}
+            </span>
+            <span className={window.late_entry_risk ? "warn" : ""}>
+              {window.late_entry_risk ? "Late review" : "Clear"}
+            </span>
+          </Fragment>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -2070,7 +2238,7 @@ function overviewRowFromModelCard(card: DashboardModelCard): OverviewRow {
     version: card.version,
     rank: card.evidence?.rank ?? null,
     universeId: card.evidence?.universe_id ?? undefined,
-    kind: card.label === "Champion" ? "champion" : "shadow",
+    kind: isActivePaperModelLabel(card.label) ? "champion" : "shadow",
     label: card.label,
     net: card.evidence?.net_total_return ?? null,
     excess: card.evidence?.excess_return ?? card.evidence?.full_delta ?? null,
@@ -2101,7 +2269,7 @@ function buildOverviewRows(snapshot?: DashboardSnapshot): OverviewRow[] {
       const [strategyId, ...versionParts] = modelKey.split(":");
       const role = roleByModelKey.get(modelKey) ?? "Research";
       const kind: OverviewRowKind =
-        role === "Champion"
+        isActivePaperModelLabel(role)
           ? "champion"
           : role.startsWith("Shadow")
             ? "shadow"
@@ -2790,6 +2958,359 @@ function PaperScreen({
   );
 }
 
+function LiveSandboxScreen({
+  snapshot,
+  liveHistory,
+  pendingAction,
+  onControl,
+  active,
+}: {
+  snapshot?: DashboardSnapshot;
+  liveHistory: LiveSandboxHistoryPoint[];
+  pendingAction: LiveSandboxControlAction | null;
+  onControl: (action: LiveSandboxControlAction) => Promise<void>;
+  active: boolean;
+}) {
+  const sandbox = snapshot?.live_sandbox;
+  const control = sandbox?.control_state;
+  const status = sandbox?.status ?? "disabled";
+  const enabled = Boolean(sandbox?.enabled);
+  const autonomy = Boolean(control?.live_autonomy_enabled);
+  const killSwitch = Boolean(control?.live_kill_switch_enabled);
+  const blocked = sandbox?.blocked_reasons ?? [];
+  const intents = sandbox?.order_intents ?? sandbox?.latest_cycle?.order_intents ?? [];
+  const openOrders = sandbox?.open_orders ?? [];
+  const positions = sandbox?.positions ?? [];
+  const fills = sandbox?.recent_fills ?? [];
+  const statusTone =
+    status === "running" || status === "armed"
+      ? "good"
+      : status === "disabled" || status === "paused" || status === "kill_switch"
+        ? "warn"
+        : "danger";
+
+  return (
+    <section className="screen" data-screen="live" hidden={!active}>
+      <div className="screen__head">
+        <div>
+          <span className="eyebrow">Live Sandbox</span>
+          <h1>$100 autonomous pilot with a hard kill switch.</h1>
+          <p>
+            Fixed champion, fixed macro-defensive universe, tagged live orders only.
+          </p>
+        </div>
+      </div>
+
+      <Surface
+        eyebrow="Live Control"
+        title={<span data-field="live-sandbox-status">{humanizeCode(status)}</span>}
+        pill={<Pill tone={statusTone}>{enabled ? "Configured" : "Disabled"}</Pill>}
+      >
+        <div className="k-list">
+          <KRow label="Cap" value={money(sandbox?.max_live_allocation)} valueClass="pos" />
+          <KRow label="Deployed" value={money(sandbox?.cap_deployed)} valueClass={Number(sandbox?.cap_deployed ?? 0) > 100 ? "neg" : "mono"} />
+          <KRow label="Equity" value={money(sandbox?.sandbox_equity)} valueClass="mono" />
+          <KRow label="Model" value={<span className="mono">{sandbox?.model_key ?? "unavailable"}</span>} />
+          <KRow label="Universe" value={<span className="mono">{sandbox?.universe_id ?? "unavailable"}</span>} />
+          <KRow label="Broker" value={<span className="mono">{sandbox?.broker_provider ?? "not connected"}</span>} />
+          <KRow label="Order prefix" value={<span className="mono">{sandbox?.order_prefix ?? "live-sandbox-"}</span>} />
+          <KRow label="Autonomy" value={autonomy ? "armed" : "paused"} valueClass={autonomy ? "pos" : "warn"} />
+          <KRow label="Kill switch" value={killSwitch ? "on" : "off"} valueClass={killSwitch ? "neg" : "pos"} />
+        </div>
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <LiveControlButton
+            action="enable_live_autonomy"
+            label="Arm autonomy"
+            disabled={!enabled || (autonomy && !killSwitch)}
+            pendingAction={pendingAction}
+            onControl={onControl}
+          />
+          <LiveControlButton
+            action="pause_live_autonomy"
+            label="Pause"
+            disabled={!autonomy}
+            pendingAction={pendingAction}
+            onControl={onControl}
+          />
+          <LiveControlButton
+            action="enable_live_kill_switch"
+            label="Kill switch"
+            danger
+            disabled={killSwitch}
+            pendingAction={pendingAction}
+            onControl={onControl}
+          />
+          <LiveControlButton
+            action="force_live_reconciliation"
+            label="Reconcile"
+            pendingAction={pendingAction}
+            onControl={onControl}
+          />
+        </div>
+      </Surface>
+
+      <Surface
+        eyebrow="Live Graph"
+        title="Sandbox equity and deployed capital"
+        pill={<Pill tone="info">{liveHistory.length}</Pill>}
+      >
+        <div className="live-chart">
+          <LiveSandboxChart
+            points={liveHistory}
+            maxAllocation={numericValue(sandbox?.max_live_allocation) ?? 100}
+          />
+        </div>
+        <div className="live-chart__legend" aria-label="Live graph legend">
+          <span><i className="legend-dot legend-dot--equity" />Equity</span>
+          <span><i className="legend-dot legend-dot--deployed" />Deployed</span>
+          <span><i className="legend-line" />Cap</span>
+        </div>
+      </Surface>
+
+      <div className="grid-2">
+        <Surface
+          eyebrow="Blocks"
+          title="Current live gates"
+          pill={<Pill tone={blocked.length ? "warn" : "good"}>{blocked.length}</Pill>}
+        >
+          <div className="row-list" data-live-blocks>
+            {blocked.length ? (
+              blocked.map((reason) => (
+                <Row primary={<small>{reason}</small>} tone="warn" key={reason} />
+              ))
+            ) : (
+              <Empty>All live sandbox gates are clear.</Empty>
+            )}
+          </div>
+        </Surface>
+
+        <Surface
+          eyebrow="Allowlist"
+          title={`${sandbox?.allowed_symbols?.length ?? 0} symbols`}
+          pill={<Pill tone="info">{sandbox?.benchmark_symbol ?? "SPY"}</Pill>}
+        >
+          <div className="replay-tags">
+            {(sandbox?.allowed_symbols ?? []).map((symbol) => (
+              <span key={symbol}>{symbol}</span>
+            ))}
+          </div>
+        </Surface>
+      </div>
+
+      <div className="grid-2">
+        <Surface
+          eyebrow="Next Intents"
+          title="Model rebalance preview"
+          pill={<Pill tone={intents.length ? "info" : "ghost"}>{intents.length}</Pill>}
+        >
+          <div className="row-list" data-live-intents>
+            {intents.length ? (
+              intents.map((intent, index) => (
+                <Row
+                  key={`${intent.symbol}-${intent.side}-${index}`}
+                  primary={<strong>{intent.symbol ?? "UNKNOWN"}</strong>}
+                  primarySub={enumText(intent.side, "side")}
+                  value={money(intent.estimated_notional)}
+                  valueTone={enumText(intent.side, "") === "BUY" ? "pos" : "warn"}
+                  meta={<span className="mono">{intent.quantity ?? "0"}</span>}
+                />
+              ))
+            ) : (
+              <Empty>No live rebalance intent currently queued.</Empty>
+            )}
+          </div>
+        </Surface>
+
+        <Surface
+          eyebrow="Tagged Orders"
+          title="Open live sandbox orders"
+          pill={<Pill tone={openOrders.length ? "warn" : "good"}>{openOrders.length}</Pill>}
+        >
+          <div className="row-list" data-live-open-orders>
+            {openOrders.length ? (
+              openOrders.map((order, index) => {
+                const row = recordValue(order);
+                return (
+                  <Row
+                    key={stringValue(row.client_order_id ?? row.broker_order_id, `order-${index}`)}
+                    primary={<strong>{stringValue(row.symbol, "UNKNOWN")}</strong>}
+                    primarySub={enumText(row.side, "side")}
+                    value={stringValue(row.status, "open")}
+                    meta={<span className="mono">{stringValue(row.quantity, "0")}</span>}
+                  />
+                );
+              })
+            ) : (
+              <Empty>No tagged live sandbox orders are open.</Empty>
+            )}
+          </div>
+        </Surface>
+      </div>
+
+      <div className="grid-2">
+        <Surface
+          eyebrow="Live Ledger"
+          title="Sandbox positions"
+          pill={<Pill tone={positions.length ? "info" : "ghost"}>{positions.length}</Pill>}
+        >
+          <div className="row-list" data-live-positions>
+            {positions.length ? (
+              positions.map((position) => (
+                <Row
+                  key={position.symbol}
+                  primary={<strong>{position.symbol}</strong>}
+                  primarySub={`qty ${position.quantity}`}
+                  value={money(position.average_cost)}
+                />
+              ))
+            ) : (
+              <Empty>No live sandbox positions.</Empty>
+            )}
+          </div>
+        </Surface>
+
+        <Surface
+          eyebrow="Recent Live Fills"
+          title="Tagged fills"
+          pill={<Pill tone={fills.length ? "info" : "ghost"}>{fills.length}</Pill>}
+        >
+          <div className="row-list" data-live-fills>
+            {fills.length ? (
+              fills.map((fill, index) => (
+                <Row
+                  key={`${fill.order_id}-${fill.filled_at}-${index}`}
+                  primary={<strong>{fill.symbol}</strong>}
+                  primarySub={enumText(fill.side, "fill")}
+                  value={money(fill.price)}
+                  meta={<span className="mono">{fill.quantity}</span>}
+                />
+              ))
+            ) : (
+              <Empty>No live sandbox fills yet.</Empty>
+            )}
+          </div>
+        </Surface>
+      </div>
+    </section>
+  );
+}
+
+function LiveSandboxChart({
+  points,
+  maxAllocation,
+}: {
+  points: LiveSandboxHistoryPoint[];
+  maxAllocation: number;
+}) {
+  const chartWidth = 960;
+  const chartHeight = 260;
+  const padX = 42;
+  const padY = 24;
+  if (!points.length) {
+    return (
+      <div
+        className="live-chart__empty"
+        role="img"
+        aria-label="Live sandbox chart unavailable"
+      >
+        <span>No live sandbox snapshots yet</span>
+      </div>
+    );
+  }
+
+  const values = [
+    0,
+    maxAllocation,
+    ...points.map((point) => point.equity),
+    ...points.map((point) => point.deployed),
+  ];
+  const maxValue = Math.max(...values, 1);
+  const minValue = Math.min(...values, 0);
+  const spread = Math.max(maxValue - minValue, 1);
+  const innerWidth = chartWidth - padX * 2;
+  const innerHeight = chartHeight - padY * 2;
+  const xFor = (index: number) =>
+    points.length === 1
+      ? chartWidth / 2
+      : padX + (index / (points.length - 1)) * innerWidth;
+  const yFor = (value: number) =>
+    chartHeight - padY - ((value - minValue) / spread) * innerHeight;
+  const pathFor = (field: "equity" | "deployed") =>
+    `M ${points
+      .map((point, index) => `${xFor(index).toFixed(1)},${yFor(point[field]).toFixed(1)}`)
+      .join(" L ")}`;
+  const equityPath = pathFor("equity");
+  const deployedPath = pathFor("deployed");
+  const capY = yFor(maxAllocation);
+  const last = points[points.length - 1];
+  const lastX = xFor(points.length - 1);
+  const latestLabel = formatLiveChartTime(last.asOf);
+  const equityTone = last.equity >= maxAllocation ? "pos" : "ai";
+
+  return (
+    <svg
+      className="area-chart live-chart__svg"
+      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Live sandbox equity and deployed capital"
+    >
+      {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+        const y = padY + tick * innerHeight;
+        return (
+          <line
+            key={tick}
+            className="grid-line"
+            x1={padX}
+            x2={chartWidth - padX}
+            y1={y}
+            y2={y}
+          />
+        );
+      })}
+      <line
+        className="live-chart__cap"
+        x1={padX}
+        x2={chartWidth - padX}
+        y1={capY}
+        y2={capY}
+      />
+      <text className="axis-text" x={padX} y={Math.max(12, capY - 6)}>
+        {money(String(maxAllocation))} cap
+      </text>
+      <path d={deployedPath} className="line-ai" data-live-deployed-line />
+      <path
+        d={equityPath}
+        className={equityTone === "pos" ? "line-pos" : "line-ai"}
+        data-live-equity-line
+      />
+      <circle
+        className={equityTone === "pos" ? "end-dot" : "end-dot ai"}
+        cx={lastX}
+        cy={yFor(last.equity)}
+        r="4"
+      />
+      <circle
+        className="end-dot market"
+        cx={lastX}
+        cy={yFor(last.deployed)}
+        r="3.5"
+      />
+      <text className="axis-text" x={padX} y={chartHeight - 6}>
+        {formatLiveChartTime(points[0].asOf)}
+      </text>
+      <text
+        className="axis-text"
+        x={chartWidth - padX}
+        y={chartHeight - 6}
+        textAnchor="end"
+      >
+        {latestLabel}
+      </text>
+    </svg>
+  );
+}
+
 function ResearchScreen({
   snapshot,
   replayReports,
@@ -2861,10 +3382,22 @@ function ReportsScreen({
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  onOpenReport: (id: string) => void;
+  onOpenReport: (row: ReportsTableRowData) => void;
   active: boolean;
 }) {
-  const baseRows = useMemo(() => rankReportsForTable(reports), [reports]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredReports = useMemo(
+    () => filterReports(reports, searchQuery),
+    [reports, searchQuery],
+  );
+  const baseRows = useMemo(
+    () => rankReportsForTable(filteredReports),
+    [filteredReports],
+  );
+  const rankedReportCount = useMemo(
+    () => filteredReports.filter((report) => report.topMetric).length,
+    [filteredReports],
+  );
   const [sort, setSort] = useState<ReportsSortState>(null);
   const [page, setPage] = useState(1);
   const sortedRows = useMemo(
@@ -2877,19 +3410,30 @@ function ReportsScreen({
   // were on page 4, then re-sorted or a refresh shrank the list).
   useEffect(() => {
     setPage(1);
-  }, [sort, baseRows]);
+  }, [sort, baseRows, searchQuery]);
 
   const totalRows = sortedRows.length;
+  const searchActive = searchQuery.trim().length > 0;
   const totalPages = Math.max(1, Math.ceil(totalRows / REPORTS_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * REPORTS_PAGE_SIZE;
   const pageRows = sortedRows.slice(pageStart, pageStart + REPORTS_PAGE_SIZE);
+  const hiddenDuplicateRows = Math.max(0, rankedReportCount - totalRows);
+  const unrankedReports = Math.max(0, filteredReports.length - rankedReportCount);
+  const countSummary = reportsCountSummary({
+    totalRows,
+    totalReports: reports.length,
+    matchingReports: filteredReports.length,
+    hiddenDuplicateRows,
+    unrankedReports,
+    searchActive,
+  });
 
   const handleSort = (key: ReportsSortKey) => {
     setSort((prev) => {
       if (!prev || prev.key !== key) return { key, direction: "desc" };
       if (prev.direction === "desc") return { key, direction: "asc" };
-      return null; // third click clears → champion-first default
+      return null; // third click clears -> default score order
     });
   };
 
@@ -2902,7 +3446,7 @@ function ReportsScreen({
           <p>
             Each row is the top-scoring strategy from one replay. Click any
             column header to sort; click again to reverse, a third time to
-            restore champion-first.
+            restore the default score order.
           </p>
         </div>
         <button
@@ -2919,11 +3463,42 @@ function ReportsScreen({
         <Notice title="Reports unavailable" message={error} tone="danger" />
       ) : null}
 
+      {reports.length > 0 ? (
+        <div className="reports-search">
+          <label className="reports-search__label" htmlFor="reports-search">
+            Search reports
+          </label>
+          <div className="reports-search__control">
+            <input
+              id="reports-search"
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.currentTarget.value)}
+              placeholder="Model key, strategy, run id, file name"
+            />
+            {searchActive ? (
+              <button
+                type="button"
+                className="btn btn--ghost reports-search__clear"
+                onClick={() => setSearchQuery("")}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <span className="reports-search__count">
+            {countSummary}
+          </span>
+        </div>
+      ) : null}
+
       {sortedRows.length === 0 ? (
         <p className="empty">
           {loading
             ? "Loading replay reports…"
-            : "No replay reports have been generated yet."}
+            : searchActive
+              ? "No reports match that search."
+              : "No replay reports have been generated yet."}
         </p>
       ) : (
         <div className="reports-table-wrap">
@@ -2987,6 +3562,7 @@ function ReportsScreen({
               rangeStart={pageStart + 1}
               rangeEnd={pageStart + pageRows.length}
               totalRows={totalRows}
+              label={totalRows === 1 ? "ranked row" : "ranked rows"}
               onPageChange={setPage}
             />
           ) : null}
@@ -2998,12 +3574,129 @@ function ReportsScreen({
 
 const REPORTS_PAGE_SIZE = 25;
 
+function reportsCountSummary({
+  totalRows,
+  totalReports,
+  matchingReports,
+  hiddenDuplicateRows,
+  unrankedReports,
+  searchActive,
+}: {
+  totalRows: number;
+  totalReports: number;
+  matchingReports: number;
+  hiddenDuplicateRows: number;
+  unrankedReports: number;
+  searchActive: boolean;
+}): string {
+  const source = searchActive
+    ? formatCount(matchingReports, "matching report")
+    : formatCount(totalReports, "report");
+  const parts = [`${formatCount(totalRows, "ranked row")} from ${source}`];
+  if (hiddenDuplicateRows > 0) {
+    parts.push(`${formatCount(hiddenDuplicateRows, "duplicate row")} collapsed`);
+  }
+  if (unrankedReports > 0) {
+    parts.push(formatCount(unrankedReports, "unranked report"));
+  }
+  return parts.join("; ");
+}
+
+function formatCount(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function filterReports(
+  reports: ReplayReportSummary[],
+  query: string,
+): ReplayReportSummary[] {
+  const exactModelKey = exactReportModelKeyQuery(query);
+  if (exactModelKey) {
+    return reports.filter((report) =>
+      reportMatchesExactModelKey(report, exactModelKey),
+    );
+  }
+
+  const tokens = normalizeReportSearchText(query)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) {
+    return reports;
+  }
+  return reports.filter((report) => {
+    const haystack = reportSearchText(report);
+    const normalizedHaystack = normalizeReportSearchText(haystack);
+    return tokens.every(
+      (token) => haystack.includes(token) || normalizedHaystack.includes(token),
+    );
+  });
+}
+
+function exactReportModelKeyQuery(query: string): string | undefined {
+  const trimmed = query.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_]*:[a-z0-9][a-z0-9_.-]*$/i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function reportMatchesExactModelKey(
+  report: ReplayReportSummary,
+  modelKey: string,
+): boolean {
+  return report.topMetric?.strategy?.trim().toLowerCase() === modelKey;
+}
+
+function modelKeyFromReportStrategy(strategy: string): string | undefined {
+  return exactReportModelKeyQuery(strategy);
+}
+
+function reportSearchText(report: ReplayReportSummary): string {
+  const metric = report.topMetric;
+  return [
+    report.id,
+    report.title,
+    report.fileName,
+    report.relativePath,
+    report.kind,
+    report.runId,
+    report.range,
+    report.universeId,
+    report.benchmark,
+    report.champion,
+    report.policy,
+    report.summary,
+    ...(report.tags ?? []),
+    metric?.strategy,
+    metric?.universe,
+    metric?.net,
+    metric?.benchmark,
+    metric?.delta,
+    metric?.maxDrawdown,
+    metric?.trades,
+    metric?.leakage,
+    metric?.championDelta,
+    metric?.championBaseline,
+    metric?.championRank,
+    report.searchText,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join(" ")
+    .toLowerCase();
+}
+
+function normalizeReportSearchText(value: string): string {
+  return value.toLowerCase().replace(/[_:./-]+/g, " ");
+}
+
 function ReportsPagination({
   page,
   totalPages,
   rangeStart,
   rangeEnd,
   totalRows,
+  label = "rows",
   onPageChange,
 }: {
   page: number;
@@ -3011,6 +3704,7 @@ function ReportsPagination({
   rangeStart: number;
   rangeEnd: number;
   totalRows: number;
+  label?: string;
   onPageChange: (page: number) => void;
 }) {
   const atFirst = page <= 1;
@@ -3020,7 +3714,7 @@ function ReportsPagination({
       <p className="reports-pagination__status" aria-live="polite">
         Showing <strong>{rangeStart.toLocaleString()}</strong>–
         <strong>{rangeEnd.toLocaleString()}</strong> of{" "}
-        <strong>{totalRows.toLocaleString()}</strong>
+        <strong>{totalRows.toLocaleString()}</strong> {label}
       </p>
       <div className="reports-pagination__controls">
         <button
@@ -3114,9 +3808,9 @@ type ReportsTableRowData = {
   maxDrawdown: string;
   updatedAt: string;
   range?: string;
+  universeId?: string;
   benchmark?: string;
-  reportChampion?: string;
-  isChampion: boolean;
+  duplicateCount: number;
 };
 
 function ReportsTableRow({
@@ -3124,32 +3818,30 @@ function ReportsTableRow({
   onOpen,
 }: {
   row: ReportsTableRowData;
-  onOpen: (id: string) => void;
+  onOpen: (row: ReportsTableRowData) => void;
 }) {
+  const opensModel = modelKeyFromReportStrategy(row.strategy) !== undefined;
   return (
     <tr
-      className={
-        row.isChampion ? "reports-table__row reports-table__row--champion" : "reports-table__row"
-      }
-      onClick={() => onOpen(row.id)}
+      className="reports-table__row"
+      onClick={() => onOpen(row)}
       tabIndex={0}
       role="button"
-      aria-label={`Open ${row.strategy}`}
+      aria-label={`${opensModel ? "Open model graph for" : "Open report"} ${row.strategy}`}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onOpen(row.id);
+          onOpen(row);
         }
       }}
     >
       <td className="reports-table__strategy">
-        {row.isChampion ? (
-          <span className="reports-table__champion-tag" aria-label="Champion">
-            CHAMPION
-          </span>
-        ) : null}
         <span className="reports-table__strategy-name">{row.strategy}</span>
         <span className="reports-table__sub">
+          {row.duplicateCount > 1
+            ? `${row.duplicateCount.toLocaleString()} replay files · `
+            : ""}
+          {row.universeId ? `${row.universeId} · ` : ""}
           {row.range ?? "—"}
           {row.benchmark ? ` · vs ${row.benchmark}` : ""}
         </span>
@@ -3170,16 +3862,10 @@ function ReportsTableRow({
 function rankReportsForTable(
   reports: ReplayReportSummary[],
 ): ReportsTableRowData[] {
-  // Pre-build rows with no champion flag yet. `championRank === "1"` and
-  // `championDelta === "+0.00%"` are present on every replay (they mean "rank
-  // 1 within this report" / "compared to itself"), so we cannot rely on
-  // those to identify THE global champion.
-  //
-  // The replay writer stamps each report with `report.champion` — the
-  // strategy that was considered champion when the report ran. We take the
-  // most recent report's value as the current champion, then mark only the
-  // single most-recent report whose top candidate matches that name.
-  const rows = reports
+  // Report-level `champion` metadata is historical and can predate the current
+  // late-entry/portfolio-governance gates, so the Reports table does not stamp
+  // a global champion badge. It ranks visible replay rows only.
+  const parsedRows = reports
     .filter((report) => report.topMetric)
     .map<ReportsTableRowData>((report) => {
       const m = report.topMetric!;
@@ -3192,37 +3878,55 @@ function rankReportsForTable(
         maxDrawdown: m.maxDrawdown ?? "—",
         updatedAt: report.updatedAt,
         range: report.range,
+        universeId: report.universeId,
         benchmark: report.benchmark,
-        // Carry the report-level champion name so we can pin a single row.
-        reportChampion: report.champion,
-        isChampion: false,
+        duplicateCount: 1,
       };
     });
-
-  const byDateDesc = [...rows].sort(
-    (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-  );
-  const latestChampion = byDateDesc.find((row) => row.reportChampion)
-    ?.reportChampion;
-
-  if (latestChampion) {
-    const championRow = byDateDesc.find(
-      (row) => row.strategy === latestChampion,
-    );
-    if (championRow) championRow.isChampion = true;
+  const collapsedRows = new Map<string, ReportsTableRowData>();
+  for (const row of parsedRows) {
+    const signature = reportsTableRowSignature(row);
+    const existing = collapsedRows.get(signature);
+    if (!existing) {
+      collapsedRows.set(signature, row);
+      continue;
+    }
+    const duplicateCount = existing.duplicateCount + 1;
+    const rowTime = Date.parse(row.updatedAt);
+    const existingTime = Date.parse(existing.updatedAt);
+    if (
+      Number.isFinite(rowTime) &&
+      (!Number.isFinite(existingTime) || rowTime > existingTime)
+    ) {
+      collapsedRows.set(signature, { ...row, duplicateCount });
+    } else {
+      existing.duplicateCount = duplicateCount;
+    }
   }
+  const rows = [...collapsedRows.values()];
 
-  // Default order: champion first, the rest by net % descending.
+  // Default order: net % descending.
   const parseNet = (value: string): number => {
     const m = value.match(/(-?[\d.]+)/);
     return m ? Number.parseFloat(m[1]) : Number.NEGATIVE_INFINITY;
   };
   rows.sort((a, b) => {
-    if (a.isChampion && !b.isChampion) return -1;
-    if (!a.isChampion && b.isChampion) return 1;
     return parseNet(b.net) - parseNet(a.net);
   });
   return rows;
+}
+
+function reportsTableRowSignature(row: ReportsTableRowData): string {
+  return [
+    row.strategy,
+    row.championDelta,
+    row.marketDelta,
+    row.net,
+    row.maxDrawdown,
+    row.range ?? "",
+    row.universeId ?? "",
+    row.benchmark ?? "",
+  ].join("\u0000");
 }
 
 function applyReportsSort(
@@ -3821,17 +4525,20 @@ function SystemStatus({
 }
 
 function PaperBoundary({ snapshot }: { snapshot?: DashboardSnapshot }) {
+  const liveSandbox = snapshot?.live_sandbox;
+  const liveEnabled = Boolean(liveSandbox?.enabled);
   return (
     <Surface
       eyebrow={glossary("This is fake money", "paper_boundary")}
-      title={glossary("Live disabled", "live_disabled")}
-      pill={<Pill tone="good">Paper only</Pill>}
+      title={liveEnabled ? "Paper plus live sandbox" : glossary("Live disabled", "live_disabled")}
+      pill={<Pill tone={liveEnabled ? "warn" : "good"}>{liveEnabled ? "$100 sandbox" : "Paper only"}</Pill>}
     >
       <div className="k-list">
         <KRow label="Runtime mode" value={<span data-field="paper-boundary-mode">{snapshot?.mode ?? "Paper Trading"}</span>} />
-        <KRow label="Money at risk" value="$0 real capital" valueClass="pos" />
+        <KRow label="Money at risk" value={liveEnabled ? money(liveSandbox?.max_live_allocation) : "$0 real capital"} valueClass={liveEnabled ? "warn" : "pos"} />
         <KRow label="Blocked products" value="No margin, shorts, options" />
         <KRow label="Live readiness" value={<span data-field="live-readiness-status">{stringValue(snapshot?.live_readiness?.status, "disabled")}</span>} />
+        <KRow label="Live sandbox" value={<span data-field="live-sandbox-boundary-status">{liveSandbox?.status ?? "disabled"}</span>} />
       </div>
     </Surface>
   );
@@ -4337,12 +5044,12 @@ function ModelArena({ snapshot }: { snapshot?: DashboardSnapshot }) {
   }
 
   const cards = snapshot?.model_cards ?? [];
-  const championEvidence =
-    cards.find((card) => card.label.toLowerCase() === "champion")?.evidence ?? null;
+  const activeModelEvidence =
+    cards.find(isActivePaperModelCard)?.evidence ?? null;
   return (
     <Surface
       eyebrow={glossary("Model Arena", "model_arena")}
-      title={glossary("Champion / Challenger", "champion_challenger")}
+      title="Paper authority / challenger"
       pill={<Pill tone="ai">active model locked</Pill>}
     >
       {cards.length ? (
@@ -4350,7 +5057,7 @@ function ModelArena({ snapshot }: { snapshot?: DashboardSnapshot }) {
           {cards.map((card) => (
             <ModelArenaCard
               card={card}
-              championEvidence={championEvidence}
+              activeModelEvidence={activeModelEvidence}
               key={`${card.strategy_id}:${card.version}`}
               snapshot={snapshot}
             />
@@ -4358,7 +5065,7 @@ function ModelArena({ snapshot }: { snapshot?: DashboardSnapshot }) {
         </div>
       ) : (
         <Empty>
-          No champion-vs-challenger comparisons yet. They appear once a new
+          No paper-authority-vs-challenger comparisons yet. They appear once a new
           model is scored against the active one.
         </Empty>
       )}
@@ -4368,20 +5075,20 @@ function ModelArena({ snapshot }: { snapshot?: DashboardSnapshot }) {
 
 function ModelArenaCard({
   card,
-  championEvidence,
+  activeModelEvidence,
   snapshot,
 }: {
   card: DashboardModelCard;
-  championEvidence?: DashboardModelEvidence | null;
+  activeModelEvidence?: DashboardModelEvidence | null;
   snapshot?: DashboardSnapshot;
 }) {
   const evidence = card.evidence ?? null;
   const modelKey = `${card.strategy_id}:${card.version}`;
-  const isChampion = card.label.toLowerCase() === "champion";
+  const isActive = isActivePaperModelCard(card);
   const shadow = shadowObservationForModel(snapshot, modelKey);
   const period = evidencePeriod(evidence);
   const excessReturn = evidence?.excess_return ?? evidence?.full_delta;
-  const returnVsChampion = modelReturnVsChampion(evidence, championEvidence);
+  const returnVsActive = modelReturnVsChampion(evidence, activeModelEvidence);
   const foldSummary =
     evidence?.positive_folds !== undefined &&
     evidence?.positive_folds !== null &&
@@ -4401,7 +5108,7 @@ function ModelArenaCard({
       eyebrow={card.label}
       title={<span className="mono">{modelKey}</span>}
       pill={
-        <Pill tone={isChampion ? "good" : "ai"}>
+        <Pill tone={isActive ? "good" : "ai"}>
           {card.state.toUpperCase()}
         </Pill>
       }
@@ -4431,13 +5138,13 @@ function ModelArenaCard({
           }
         />
         <KRow
-          label="Return vs champion"
+          label="Return vs paper model"
           value={
-            isChampion ? (
-              "current champion"
+            isActive ? (
+              "active paper authority"
             ) : (
-              <span className={toneClass(returnVsChampion)}>
-                {percentValue(returnVsChampion)}
+              <span className={toneClass(returnVsActive)}>
+                {percentValue(returnVsActive)}
               </span>
             )
           }
@@ -4494,7 +5201,7 @@ function ModelArenaCard({
             />
             <KRow label="Targets" value={targetSummary(shadow)} />
           </>
-        ) : isChampion ? (
+        ) : isActive ? (
           <>
             <KRow label="Paper equity" value={money(snapshot?.estimated_equity)} />
             <KRow
@@ -5445,6 +6152,35 @@ function ControlButton({
   );
 }
 
+function LiveControlButton({
+  action,
+  label,
+  disabled = false,
+  danger = false,
+  pendingAction,
+  onControl,
+}: {
+  action: LiveSandboxControlAction;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+  pendingAction: LiveSandboxControlAction | null;
+  onControl: (action: LiveSandboxControlAction) => Promise<void>;
+}) {
+  const pending = pendingAction === action;
+  return (
+    <button
+      className={danger ? "btn btn--danger" : "btn"}
+      data-live-control-action={action}
+      disabled={disabled || pendingAction !== null}
+      type="button"
+      onClick={() => void onControl(action)}
+    >
+      {pending ? "Sending..." : label}
+    </button>
+  );
+}
+
 function HonestRows({
   values,
   empty,
@@ -6365,6 +7101,7 @@ const SCREEN_META: Record<ScreenKey, { label: string; sub: string }> = {
   home: { label: "Home", sub: "Command Center" },
   strategies: { label: "Models", sub: "Active strategy + arena" },
   paper: { label: "Paper Trading", sub: "Positions · fills · taxes" },
+  live: { label: "Live Sandbox", sub: "$100 cap · kill switch" },
   risk: { label: "Risk", sub: "Severity · exposures · kill switch" },
   research: { label: "Research Lab", sub: "Nightly learning · health" },
   reports: { label: "Reports", sub: "All research replays at a glance" },
@@ -6798,6 +7535,36 @@ function scoresFromEvaluation(evaluation: NightlyLearningRun["champion_evaluatio
   );
 }
 
+function liveSandboxHistoryPoint(
+  snapshot?: DashboardSnapshot,
+): LiveSandboxHistoryPoint | undefined {
+  const sandbox = snapshot?.live_sandbox;
+  const asOf =
+    sandbox?.generated_at ??
+    sandbox?.latest_cycle?.as_of ??
+    snapshot?.generated_at;
+  const timestamp = asOf ? Date.parse(asOf) : Number.NaN;
+  const equity = numericValue(sandbox?.sandbox_equity);
+  const deployed = numericValue(sandbox?.cap_deployed);
+  const cash = numericValue(sandbox?.sandbox_cash);
+  if (
+    !asOf ||
+    !Number.isFinite(timestamp) ||
+    equity === undefined ||
+    deployed === undefined ||
+    cash === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    asOf,
+    timestamp,
+    equity,
+    deployed,
+    cash,
+  };
+}
+
 function confidenceBand(score: number | undefined) {
   if (score === undefined) return "—";
   if (score < 0.4) return "Low";
@@ -6883,6 +7650,21 @@ function formatIso(value: string | undefined) {
   return value;
 }
 
+function formatLiveChartTime(value: string | undefined) {
+  if (!value) {
+    return "pending";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 function screenFromHash(hash: string): ScreenKey | null {
   const value = hash.replace(/^#\/?/, "").toLowerCase();
   if (value.startsWith("model")) return "model";
@@ -6892,6 +7674,7 @@ function screenFromHash(hash: string): ScreenKey | null {
     screen === "home" ||
     screen === "strategies" ||
     screen === "paper" ||
+    screen === "live" ||
     screen === "risk" ||
     screen === "research" ||
     screen === "reports" ||

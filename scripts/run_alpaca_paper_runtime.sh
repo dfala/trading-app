@@ -30,6 +30,8 @@ Options:
   --paper-epoch-started-at RFC3339
                          Ignore broker orders submitted before this timestamp.
   --active-model-key KEY  Paper model key. Default: monthly_sector_momentum:1.0.0
+  --active-model-universe-id ID
+                         Optional universe id for active model keys reused across universes.
   --shadow-challenger-model-key KEY
                          Optional shadow-only challenger model key.
   --shadow-challenger-model-keys CSV
@@ -37,6 +39,8 @@ Options:
   --strategy-schedule SCHEDULE
                          Paper schedule: daily_close or market_open. Default: daily_close
   --symbols CSV          Optional comma-separated symbol override.
+  --live-sandbox-enabled yes|no
+                         Enable the bounded $100 live sandbox. Default: env/false.
   -h, --help             Show this help.
 
 The script refuses to start if the backend/API port is already occupied. The
@@ -88,10 +92,12 @@ MAX_PAPER_SEMICONDUCTOR_ALLOCATION="${TRADING_APP_MAX_PAPER_SEMICONDUCTOR_ALLOCA
 INITIAL_PAPER_DEPLOYMENT_ALLOCATION="${TRADING_APP_INITIAL_PAPER_DEPLOYMENT_ALLOCATION:-}"
 PAPER_EPOCH_STARTED_AT="${TRADING_APP_PAPER_EPOCH_STARTED_AT:-}"
 ACTIVE_MODEL_KEY="${TRADING_APP_ACTIVE_MODEL_KEY:-monthly_sector_momentum:1.0.0}"
+ACTIVE_MODEL_UNIVERSE_ID="${TRADING_APP_ACTIVE_MODEL_UNIVERSE_ID:-}"
 SHADOW_CHALLENGER_MODEL_KEY="${TRADING_APP_SHADOW_CHALLENGER_MODEL_KEY:-}"
 SHADOW_CHALLENGER_MODEL_KEYS="${TRADING_APP_SHADOW_CHALLENGER_MODEL_KEYS:-}"
 STRATEGY_SCHEDULE="${TRADING_APP_STRATEGY_SCHEDULE:-daily_close}"
 SYMBOLS="${TRADING_APP_SYMBOLS:-}"
+LIVE_SANDBOX_ENABLED="${TRADING_APP_LIVE_SANDBOX_ENABLED:-false}"
 
 while (($#)); do
   case "$1" in
@@ -146,6 +152,10 @@ while (($#)); do
       ACTIVE_MODEL_KEY="$2"
       shift 2
       ;;
+    --active-model-universe-id)
+      ACTIVE_MODEL_UNIVERSE_ID="$2"
+      shift 2
+      ;;
     --shadow-challenger-model-key)
       SHADOW_CHALLENGER_MODEL_KEY="$2"
       shift 2
@@ -160,6 +170,11 @@ while (($#)); do
       ;;
     --symbols)
       SYMBOLS="$2"
+      shift 2
+      ;;
+    --live-sandbox-enabled)
+      LIVE_SANDBOX_ENABLED="$2"
+      export TRADING_APP_LIVE_SANDBOX_ENABLED="${LIVE_SANDBOX_ENABLED}"
       shift 2
       ;;
     -h|--help)
@@ -238,6 +253,8 @@ cmd=(
   "${INITIAL_PAPER_DEPLOYMENT_ALLOCATION}"
   "--active-model-key"
   "${ACTIVE_MODEL_KEY}"
+  "--active-model-universe-id"
+  "${ACTIVE_MODEL_UNIVERSE_ID}"
   "--strategy-schedule"
   "${STRATEGY_SCHEDULE}"
   "--monitor-only-dry-run-first"
@@ -261,4 +278,5 @@ fi
 
 echo "Starting Alpaca paper backend/API on http://${DASHBOARD_HOST}:${DASHBOARD_PORT}/"
 echo "Redirecting browser dashboard routes to ${OPERATOR_DASHBOARD_URL}"
+echo "Live sandbox enabled: ${LIVE_SANDBOX_ENABLED}"
 exec "${cmd[@]}"

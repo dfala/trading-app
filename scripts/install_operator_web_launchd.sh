@@ -215,7 +215,7 @@ EOF
 } > "${LAUNCHD_WRAPPER}"
 chmod 700 "${LAUNCHD_WRAPPER}"
 
-program_args=("${LAUNCHD_WRAPPER}")
+program_args=("/bin/bash" "${LAUNCHD_WRAPPER}")
 
 xml_escape() {
   local value="$1"

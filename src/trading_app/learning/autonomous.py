@@ -87,6 +87,15 @@ class AutonomousLearningCandidate(TradingModel):
     gate_status: str = Field(min_length=1)
     status: str = Field(min_length=1)
     benchmark_ladder: dict[str, float] = Field(default_factory=dict)
+    recent_window_excess_share: dict[str, float] = Field(default_factory=dict)
+    late_entry_risk: bool = False
+    late_entry_risk_reason: str | None = None
+    portfolio_governance_classification: str = "unknown"
+    champion_eligible: bool = True
+    average_semiconductor_exposure: float = 0.0
+    peak_semiconductor_exposure: float = 0.0
+    material_semiconductor_exposure_ratio: float = 0.0
+    portfolio_governance_notes: tuple[str, ...] = ()
     manual_approval_required: bool = True
 
 
@@ -125,6 +134,15 @@ class AutonomousShadowArenaCandidate(TradingModel):
     risk_adjusted_score: float
     gate_status: str = Field(min_length=1)
     status: str = Field(min_length=1)
+    recent_window_excess_share: dict[str, float] = Field(default_factory=dict)
+    late_entry_risk: bool = False
+    late_entry_risk_reason: str | None = None
+    portfolio_governance_classification: str = "unknown"
+    champion_eligible: bool = True
+    average_semiconductor_exposure: float = 0.0
+    peak_semiconductor_exposure: float = 0.0
+    material_semiconductor_exposure_ratio: float = 0.0
+    portfolio_governance_notes: tuple[str, ...] = ()
     next_review_action: str = Field(min_length=1)
 
 
@@ -160,6 +178,15 @@ class AutonomousLearningLeaderboardEntry(TradingModel):
     gate_status: str = Field(min_length=1)
     status: str = Field(min_length=1)
     benchmark_ladder: dict[str, float] = Field(default_factory=dict)
+    recent_window_excess_share: dict[str, float] = Field(default_factory=dict)
+    late_entry_risk: bool = False
+    late_entry_risk_reason: str | None = None
+    portfolio_governance_classification: str = "unknown"
+    champion_eligible: bool = True
+    average_semiconductor_exposure: float = 0.0
+    peak_semiconductor_exposure: float = 0.0
+    material_semiconductor_exposure_ratio: float = 0.0
+    portfolio_governance_notes: tuple[str, ...] = ()
     manual_approval_required: bool = True
 
 
@@ -782,6 +809,19 @@ def update_autonomous_learning_leaderboard(
             gate_status=source.gate_status,
             status=source.status,
             benchmark_ladder=source.benchmark_ladder,
+            recent_window_excess_share=source.recent_window_excess_share,
+            late_entry_risk=source.late_entry_risk,
+            late_entry_risk_reason=source.late_entry_risk_reason,
+            portfolio_governance_classification=(
+                source.portfolio_governance_classification
+            ),
+            champion_eligible=source.champion_eligible,
+            average_semiconductor_exposure=source.average_semiconductor_exposure,
+            peak_semiconductor_exposure=source.peak_semiconductor_exposure,
+            material_semiconductor_exposure_ratio=(
+                source.material_semiconductor_exposure_ratio
+            ),
+            portfolio_governance_notes=source.portfolio_governance_notes,
             manual_approval_required=True,
         )
     limit = int(run.metadata.get("leaderboard_size", DEFAULT_LEADERBOARD_SIZE))
@@ -830,11 +870,18 @@ def render_autonomous_learning_leaderboard_markdown(
         "",
         "| Rank | Candidate | Hypotheses | Seen | Net Return | Benchmark | "
         "Full Delta | Stress Delta | Positive Folds | Min Fold | Worst DD | "
-        "Risk Score | Gate | Status |",
+        "Governance | Semi Avg/Peak | Recent Risk | Risk Score | Gate | Status |",
         "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
-        "---: | ---: | --- | --- |",
+        "--- | ---: | --- | ---: | --- | --- |",
     ]
     for entry in leaderboard.entries[:50]:
+        recent_risk = (
+            entry.late_entry_risk_reason if entry.late_entry_risk else "clear"
+        )
+        semi_exposure = (
+            f"{entry.average_semiconductor_exposure:.1%}/"
+            f"{entry.peak_semiconductor_exposure:.1%}"
+        )
         lines.append(
             f"| {entry.rank} | `{entry.universe_id}:{entry.model_key}` | "
             f"`{', '.join(entry.hypothesis_ids)}` | "
@@ -846,6 +893,9 @@ def render_autonomous_learning_leaderboard_markdown(
             f"{entry.positive_folds}/{entry.fold_count} | "
             f"{entry.min_fold_delta:+.2%} | "
             f"{entry.worst_drawdown:.2%} | "
+            f"{_table_text(entry.portfolio_governance_classification)} | "
+            f"{semi_exposure} | "
+            f"{_table_text(recent_risk)} | "
             f"{entry.risk_adjusted_score:.2f} | "
             f"{_table_text(entry.gate_status)} | "
             f"{_table_text(entry.status)} |"
@@ -859,9 +909,13 @@ def render_autonomous_learning_leaderboard_markdown(
             "- Repeated sightings count as evidence only when the underlying "
             "hypothesis fingerprint is distinct or tuning mode is explicit.",
             "- Very recent spikes do not make a winner promotion-ready. Champion "
-            "reviews must check whether the last 21/63 trading days explain too "
-            "much of the edge and must prefer 3/6/12-month consistency over "
-            "late-window acceleration.",
+            "reviews must check whether the last 21/63/126/252 trading days "
+            "explain too much of the edge and must prefer 3/6/12-month "
+            "consistency over late-window acceleration. New replay rows with "
+            "late-entry risk are blocked from promotion and shadow-review gates.",
+            "- Sector sleeves are useful shadow candidates, but they are not "
+            "eligible for whole-portfolio champion authority unless a separate "
+            "operator policy caps and composes them into a portfolio.",
             "- Manual approval is required before any paper or live authority changes.",
             "",
         ]
@@ -888,10 +942,19 @@ def render_shadow_arena_markdown(report: AutonomousShadowArenaReport) -> str:
         "## Candidates",
         "",
         "| Rank | Candidate | Virtual Equity | Virtual PnL | Full Delta | "
-        "Stress Delta | Min Fold | Worst DD | Risk Score | Gate | Action |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        "Stress Delta | Min Fold | Worst DD | Governance | Semi Avg/Peak | "
+        "Recent Risk | Risk Score | Gate | Action |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | "
+        "--- | ---: | --- | --- |",
     ]
     for candidate in report.candidates:
+        recent_risk = (
+            candidate.late_entry_risk_reason if candidate.late_entry_risk else "clear"
+        )
+        semi_exposure = (
+            f"{candidate.average_semiconductor_exposure:.1%}/"
+            f"{candidate.peak_semiconductor_exposure:.1%}"
+        )
         lines.append(
             f"| {candidate.rank} | `{candidate.universe_id}:{candidate.model_key}` | "
             f"{_format_optional_money(candidate.historical_virtual_equity)} | "
@@ -900,6 +963,9 @@ def render_shadow_arena_markdown(report: AutonomousShadowArenaReport) -> str:
             f"{_format_optional_pct(candidate.stress_delta)} | "
             f"{candidate.min_fold_delta:+.2%} | "
             f"{candidate.worst_drawdown:.2%} | "
+            f"{_table_text(candidate.portfolio_governance_classification)} | "
+            f"{semi_exposure} | "
+            f"{_table_text(recent_risk)} | "
             f"{candidate.risk_adjusted_score:.2f} | "
             f"{_table_text(candidate.gate_status)} | "
             f"{_table_text(candidate.next_review_action)} |"
@@ -1320,8 +1386,13 @@ def _candidate_readiness_report(
             "Low-drawdown watchlist: all-fold-positive candidates with max "
             "drawdown no worse than -25%.",
             "Recent-spike discipline: do not promote a model because the last "
-            "21 or 63 trading days exploded upward; require 3/6/12-month "
-            "consistency and a late-entry risk review.",
+            "21/63/126/252 trading days explain too much of the edge; require "
+            "3/6/12-month consistency and a late-entry risk review. New replay "
+            "rows with late-entry risk are blocked from promotion and "
+            "pilot-review gates.",
+            "Portfolio-governance discipline: sector sleeves may be shadowed, "
+            "but only champion-eligible portfolio candidates can enter promotion "
+            "or pilot review.",
             "Static buy-and-hold instruments remain benchmarks only.",
         ),
         summary=summary,
@@ -1365,6 +1436,8 @@ def _candidate_is_promotion_qualified(
         and candidate.full_delta > 0
         and stress_positive
         and beats_tech
+        and not candidate.late_entry_risk
+        and candidate.champion_eligible
         and candidate.min_fold_delta >= 0.10
         and candidate.worst_drawdown >= -0.30
     )
@@ -1377,6 +1450,8 @@ def _candidate_is_pilot_eligible(candidate: AutonomousLearningCandidate) -> bool
         and candidate.positive_folds == candidate.fold_count
         and candidate.full_delta > 0
         and stress_positive
+        and not candidate.late_entry_risk
+        and candidate.champion_eligible
         and candidate.min_fold_delta >= 0.05
         and candidate.worst_drawdown >= -0.35
     )
@@ -1473,14 +1548,25 @@ def _candidate_table(
 ) -> list[str]:
     lines = [
         "| Rank | Universe | Candidate | Full Delta | Stress Delta | Min Fold | "
-        "Worst DD | Folds | Risk Score | Gate | Status |",
-        "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        "Worst DD | Folds | Governance | Semi Avg/Peak | Recent Risk | "
+        "Risk Score | Gate | Status |",
+        "| ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | "
+        "--- | ---: | --- | --- |",
     ]
     if not candidates:
         empty = _table_text(empty_message)
-        lines.append(f"| 0 | `none` | {empty} | - | - | - | - | 0/0 | - | - | - |")
+        lines.append(
+            f"| 0 | `none` | {empty} | - | - | - | - | 0/0 | - | - | - | - | - | - |"
+        )
         return lines
     for candidate in candidates:
+        recent_risk = (
+            candidate.late_entry_risk_reason if candidate.late_entry_risk else "clear"
+        )
+        semi_exposure = (
+            f"{candidate.average_semiconductor_exposure:.1%}/"
+            f"{candidate.peak_semiconductor_exposure:.1%}"
+        )
         lines.append(
             f"| {candidate.rank} | `{candidate.universe_id}` | "
             f"`{candidate.model_key}` | "
@@ -1489,6 +1575,9 @@ def _candidate_table(
             f"{candidate.min_fold_delta:+.2%} | "
             f"{candidate.worst_drawdown:.2%} | "
             f"{candidate.positive_folds}/{candidate.fold_count} | "
+            f"{_table_text(candidate.portfolio_governance_classification)} | "
+            f"{semi_exposure} | "
+            f"{_table_text(recent_risk)} | "
             f"{candidate.risk_adjusted_score:.2f} | "
             f"{_table_text(candidate.gate_status)} | "
             f"{_table_text(candidate.status)} |"
@@ -1587,11 +1676,16 @@ def _shadow_arena_candidate(
     historical_pnl = (
         historical_equity - starting_cash if historical_equity is not None else None
     )
-    action = (
-        "Manual review eligible if forward evidence confirms."
-        if _candidate_passes_shadow_gate(candidate)
-        else "Track only; gates are incomplete."
-    )
+    if candidate.late_entry_risk:
+        action = "Late-entry review only; do not promote from recent acceleration."
+    elif not candidate.champion_eligible:
+        action = "Sector sleeve only; shadow with a cap, not as champion."
+    else:
+        action = (
+            "Manual review eligible if forward evidence confirms."
+            if _candidate_passes_shadow_gate(candidate)
+            else "Track only; gates are incomplete."
+        )
     return AutonomousShadowArenaCandidate(
         rank=rank,
         universe_id=candidate.universe_id,
@@ -1609,6 +1703,19 @@ def _shadow_arena_candidate(
         risk_adjusted_score=candidate.risk_adjusted_score,
         gate_status=candidate.gate_status,
         status=candidate.status,
+        recent_window_excess_share=candidate.recent_window_excess_share,
+        late_entry_risk=candidate.late_entry_risk,
+        late_entry_risk_reason=candidate.late_entry_risk_reason,
+        portfolio_governance_classification=(
+            candidate.portfolio_governance_classification
+        ),
+        champion_eligible=candidate.champion_eligible,
+        average_semiconductor_exposure=candidate.average_semiconductor_exposure,
+        peak_semiconductor_exposure=candidate.peak_semiconductor_exposure,
+        material_semiconductor_exposure_ratio=(
+            candidate.material_semiconductor_exposure_ratio
+        ),
+        portfolio_governance_notes=candidate.portfolio_governance_notes,
         next_review_action=action,
     )
 
@@ -1619,6 +1726,7 @@ def _candidate_passes_shadow_gate(candidate: AutonomousLearningCandidate) -> boo
         candidate.status == "all folds positive"
         and candidate.min_fold_delta > 0
         and stress_positive
+        and not candidate.late_entry_risk
         and candidate.worst_drawdown >= -0.30
     )
 
@@ -1628,6 +1736,8 @@ def _candidate_sort_key(candidate: AutonomousLearningCandidate) -> tuple[float, 
     gate_bonus = 1.0 if _candidate_passes_shadow_gate(candidate) else 0.0
     return (
         gate_bonus,
+        0.0 if candidate.late_entry_risk else 1.0,
+        1.0 if candidate.champion_eligible else 0.0,
         candidate.risk_adjusted_score,
         float(candidate.positive_folds),
         candidate.min_fold_delta,
@@ -1652,11 +1762,15 @@ def _leaderboard_entry_sort_key(
         if entry.status == "all folds positive"
         and entry.min_fold_delta > 0
         and stress_delta > 0
+        and not entry.late_entry_risk
+        and entry.champion_eligible
         and entry.worst_drawdown >= -0.30
         else 0.0
     )
     return (
         gate_bonus,
+        0.0 if entry.late_entry_risk else 1.0,
+        1.0 if entry.champion_eligible else 0.0,
         entry.risk_adjusted_score,
         float(entry.positive_folds),
         entry.min_fold_delta,
@@ -1678,11 +1792,13 @@ def _leaderboard_summary(
         if entry.status == "all folds positive"
         and entry.min_fold_delta > 0
         and (entry.stress_delta is None or entry.stress_delta > 0)
+        and not entry.late_entry_risk
+        and entry.champion_eligible
         and entry.worst_drawdown >= -0.30
     )
     return (
         f"Current research leader is {leader.universe_id}:{leader.model_key}; "
-        f"{gate_count} leaderboard candidate(s) pass the shadow review gates. "
+        f"{gate_count} leaderboard candidate(s) pass the champion-review gates. "
         "Manual review remains required before authority changes."
     )
 
@@ -1753,6 +1869,19 @@ def _candidate_summary(rank: int, score) -> AutonomousLearningCandidate:
         gate_status=score.gate_status,
         status=score.status,
         benchmark_ladder=score.benchmark_ladder,
+        recent_window_excess_share=score.recent_window_excess_share,
+        late_entry_risk=score.late_entry_risk,
+        late_entry_risk_reason=score.late_entry_risk_reason,
+        portfolio_governance_classification=(
+            score.portfolio_governance_classification
+        ),
+        champion_eligible=score.champion_eligible,
+        average_semiconductor_exposure=score.average_semiconductor_exposure,
+        peak_semiconductor_exposure=score.peak_semiconductor_exposure,
+        material_semiconductor_exposure_ratio=(
+            score.material_semiconductor_exposure_ratio
+        ),
+        portfolio_governance_notes=score.portfolio_governance_notes,
         manual_approval_required=True,
     )
 
@@ -1784,6 +1913,8 @@ def _recommended_candidate(
             score.status == "all folds positive"
             and score.min_fold_delta > 0
             and stress_positive
+            and not score.late_entry_risk
+            and score.champion_eligible
             and score.worst_drawdown >= -0.30
         ):
             return score

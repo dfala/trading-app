@@ -56,6 +56,14 @@ class DashboardModelEvidence(TradingModel):
     gate_status: str | None = None
     status: str | None = None
     latest_run_id: str | None = None
+    late_entry_risk: bool | None = None
+    late_entry_risk_reason: str | None = None
+    portfolio_governance_classification: str | None = None
+    champion_eligible: bool | None = None
+    average_semiconductor_exposure: float | None = None
+    peak_semiconductor_exposure: float | None = None
+    material_semiconductor_exposure_ratio: float | None = None
+    portfolio_governance_notes: tuple[str, ...] = ()
     note: str | None = None
 
 
@@ -103,6 +111,7 @@ class OperatorDashboardSnapshot(TradingModel):
     session_state: Any | None = None
     model_arena: Any | None = None
     live_readiness: Any | None = None
+    live_sandbox: Any | None = None
     runtime_state: Any | None = None
     control_state: Any | None = None
     last_control_result: Any | None = None

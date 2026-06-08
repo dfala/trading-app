@@ -65,6 +65,9 @@ def test_runtime_wrapper_uses_fixed_paper_runtime_startup() -> None:
         'SHADOW_CHALLENGER_MODEL_KEYS="${TRADING_APP_SHADOW_CHALLENGER_MODEL_KEYS:-'
     ) in text
     assert 'STRATEGY_SCHEDULE="${TRADING_APP_STRATEGY_SCHEDULE:-daily_close}"' in text
+    assert 'LIVE_SANDBOX_ENABLED="${TRADING_APP_LIVE_SANDBOX_ENABLED:-false}"' in text
+    assert "--live-sandbox-enabled" in text
+    assert "Live sandbox enabled: ${LIVE_SANDBOX_ENABLED}" in text
     assert 'lsof -tiTCP:"${DASHBOARD_PORT}"' in text
     assert "refusing to choose a different port" in text
     assert "trading_app.runtime.run_alpaca_paper" in text
@@ -100,6 +103,7 @@ def test_launchd_installer_writes_run_at_load_without_keepalive_restart() -> Non
     assert 'SHADOW_CHALLENGER_MODEL_KEY=""' in text
     assert 'SHADOW_CHALLENGER_MODEL_KEYS=""' in text
     assert 'STRATEGY_SCHEDULE="daily_close"' in text
+    assert 'LIVE_SANDBOX_ENABLED="false"' in text
     assert "RunAtLoad" in text
     assert "<true/>" in text
     assert "KeepAlive" in text
@@ -118,6 +122,7 @@ def test_launchd_installer_writes_run_at_load_without_keepalive_restart() -> Non
     assert "TRADING_APP_SHADOW_CHALLENGER_MODEL_KEY" in text
     assert "TRADING_APP_SHADOW_CHALLENGER_MODEL_KEYS" in text
     assert "TRADING_APP_STRATEGY_SCHEDULE" in text
+    assert "TRADING_APP_LIVE_SANDBOX_ENABLED" in text
     assert "--dashboard-redirect-url" in text
     assert "--starting-cash" in text
     assert "--managed-capital" in text
@@ -129,6 +134,7 @@ def test_launchd_installer_writes_run_at_load_without_keepalive_restart() -> Non
     assert "--shadow-challenger-model-key" in text
     assert "--shadow-challenger-model-keys" in text
     assert "--strategy-schedule" in text
+    assert "--live-sandbox-enabled" in text
     assert "install -m 600" in text
     assert "LAUNCHD_WRAPPER" in text
     assert "launchctl bootstrap" in text

@@ -13,6 +13,18 @@ const DEFAULT_REPLAY_REPORT_ROOT = path.join(
   "research",
   "replay",
 );
+const SEARCH_TEXT_MAX_LENGTH = 2_500;
+const SEARCH_TEXT_HEAD_LENGTH = 350;
+const SEARCH_BACKTICK_TOKEN_LIMIT = 200;
+const SEARCH_MODEL_TOKEN_LIMIT = 500;
+const KNOWN_REPORT_UNIVERSES = [
+  "semiconductor-champions",
+  "liquid-risk-on",
+  "macro-defensive",
+  "growth-industries",
+  "broad-core",
+  "sector-spdr",
+] as const;
 
 export function replayReportRoot() {
   const configured = process.env.TRADING_APP_REPLAY_REPORT_DIR?.trim();
@@ -188,6 +200,12 @@ function summarizeReport(
       : parseTopRanking(contents, championModelKey);
   const title = parseTitle(contents) ?? titleFromFileName(fileName);
   const range = metadata.get("range");
+  const universeId =
+    cleanUniverseId(metadata.get("universe id")) ??
+    cleanUniverseId(metadata.get("universe_id")) ??
+    cleanUniverseId(metadata.get("universe")) ??
+    cleanUniverseId(ranking?.universe) ??
+    universeIdFromReportPath(relativePath);
   const benchmark = metadata.get("benchmark") ?? ranking?.benchmark;
   const champion =
     metadata.get("champion") ??
@@ -208,6 +226,7 @@ function summarizeReport(
     sizeBytes: fileStat.size,
     runId: metadata.get("run id"),
     range,
+    universeId,
     benchmark,
     champion,
     policy: metadata.get("policy"),
@@ -216,7 +235,79 @@ function summarizeReport(
     summary: parseSummarySentence(contents),
     tags: buildTags(relativePath, kind, metadata, ranking),
     topMetric: ranking ?? metricsFromSummary(metadata),
+    searchText: buildReportSearchText(
+      relativePath,
+      contents,
+      companionContents,
+      metadata,
+      ranking,
+      universeId,
+    ),
   };
+}
+
+function buildReportSearchText(
+  relativePath: string,
+  contents: string,
+  companionContents: string | undefined,
+  metadata: Map<string, string>,
+  ranking: ReplayReportMetricSnapshot | undefined,
+  universeId: string | undefined,
+) {
+  const chunks = compactSearchChunks([
+    relativePath,
+    path.posix.basename(relativePath),
+    universeId,
+    ...Array.from(metadata.entries()).flat(),
+    ...(ranking ? Object.values(ranking) : []),
+    ...extractReportSearchChunks(contents),
+    ...extractReportSearchChunks(companionContents),
+  ]);
+  return chunks
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .slice(0, SEARCH_TEXT_MAX_LENGTH);
+}
+
+function extractReportSearchChunks(contents: string | undefined) {
+  if (!contents) {
+    return [];
+  }
+  const modelTokens: string[] = [];
+  for (const match of contents.matchAll(
+    /[A-Za-z0-9_]+:[A-Za-z0-9][A-Za-z0-9_.:-]*/g,
+  )) {
+    modelTokens.push(match[0]);
+    if (modelTokens.length >= SEARCH_MODEL_TOKEN_LIMIT) {
+      break;
+    }
+  }
+  const backtickTokens: string[] = [];
+  for (const match of contents.matchAll(/`([^`]{1,240})`/g)) {
+    backtickTokens.push(match[1]);
+    if (backtickTokens.length >= SEARCH_BACKTICK_TOKEN_LIMIT) {
+      break;
+    }
+  }
+  return [
+    ...modelTokens,
+    ...backtickTokens,
+    contents.slice(0, SEARCH_TEXT_HEAD_LENGTH),
+  ];
+}
+
+function compactSearchChunks(chunks: Array<string | undefined>) {
+  const seen = new Set<string>();
+  const compacted: string[] = [];
+  for (const value of chunks) {
+    const chunk = value?.replace(/\s+/g, " ").trim();
+    if (!chunk || seen.has(chunk)) {
+      continue;
+    }
+    seen.add(chunk);
+    compacted.push(chunk);
+  }
+  return compacted;
 }
 
 function compareReplayReports(
@@ -401,6 +492,7 @@ function parseRankingSection(
     : undefined;
   return {
     strategy: cleanStrategyName(cell("strategy")),
+    universe: cleanUniverseId(cell("universe")),
     net: cell("net"),
     benchmark: cell("benchmark"),
     delta,
@@ -457,6 +549,7 @@ function parseCandidateScoreboard(
   const championDelta = formatPercentDelta(fullDelta, championBaseline);
   return {
     strategy: cleanStrategyName(cell("candidate")),
+    universe: cleanUniverseId(cell("universe")),
     net: fullDelta,
     benchmark: cell("stress delta"),
     delta: fullDelta,
@@ -469,6 +562,21 @@ function parseCandidateScoreboard(
     championBaseline,
     championRank: championRow ? cellFor(championRow, "rank") : undefined,
   };
+}
+
+function universeIdFromReportPath(relativePath: string): string | undefined {
+  const cleanPath = relativePath.toLowerCase();
+  return KNOWN_REPORT_UNIVERSES.find((universe) =>
+    cleanPath.includes(universe),
+  );
+}
+
+function cleanUniverseId(value?: string) {
+  const cleaned = cleanMarkdownValue(value).toLowerCase().replace(/\s+/g, "-");
+  if (!cleaned || cleaned === "-" || cleaned === "—" || cleaned === "n/a") {
+    return undefined;
+  }
+  return cleaned;
 }
 
 function metricsFromSummary(

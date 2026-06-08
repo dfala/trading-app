@@ -6,6 +6,14 @@ export type OperatorControlAction =
   | "force_reconciliation"
   | "generate_report";
 
+export type LiveSandboxControlAction =
+  | "enable_live_autonomy"
+  | "pause_live_autonomy"
+  | "resume_live_autonomy"
+  | "enable_live_kill_switch"
+  | "disable_live_kill_switch"
+  | "force_live_reconciliation";
+
 export type Tone = "good" | "warn" | "danger" | "info" | string;
 
 export type DashboardMetric = {
@@ -130,6 +138,14 @@ export type DashboardModelEvidence = {
   gate_status?: string | null;
   status?: string | null;
   latest_run_id?: string | null;
+  late_entry_risk?: boolean | null;
+  late_entry_risk_reason?: string | null;
+  portfolio_governance_classification?: string | null;
+  champion_eligible?: boolean | null;
+  average_semiconductor_exposure?: number | null;
+  peak_semiconductor_exposure?: number | null;
+  material_semiconductor_exposure_ratio?: number | null;
+  portfolio_governance_notes?: string[];
   note?: string | null;
 };
 
@@ -164,6 +180,17 @@ export type ModelPerformanceMetrics = {
   decision_count: number;
 };
 
+export type ModelPerformanceRecentWindow = {
+  trading_days: number;
+  start_date: string;
+  end_date: string;
+  model_return_delta: number;
+  benchmark_return_delta: number;
+  excess_return_delta: number;
+  excess_contribution_share?: number | null;
+  late_entry_risk: boolean;
+};
+
 export type ModelStrategyProfile = {
   hypothesis: string;
   trading_cadence: string;
@@ -196,6 +223,9 @@ export type ModelPerformanceResponse = {
   window_policy: string;
   available_window_count: number;
   strategy_profile?: ModelStrategyProfile | null;
+  recent_windows?: ModelPerformanceRecentWindow[];
+  late_entry_risk?: boolean;
+  late_entry_risk_summary?: string | null;
   metrics: ModelPerformanceMetrics;
   points: ModelPerformancePoint[];
   error?: string;
@@ -254,6 +284,77 @@ export type ShadowChallengerObservation = {
   };
   estimated_equity: string;
   previous_estimated_equity?: string | null;
+};
+
+export type LiveSandboxControlState = {
+  live_autonomy_enabled?: boolean;
+  live_kill_switch_enabled?: boolean;
+  updated_at?: string;
+  updated_by?: string;
+  reason?: string;
+};
+
+export type LiveSandboxOrderIntent = {
+  symbol?: string;
+  side?: string | { value?: string };
+  quantity?: string;
+  estimated_price?: string;
+  estimated_notional?: string;
+  current_value?: string;
+  target_value?: string;
+};
+
+export type LiveSandboxCycle = {
+  as_of?: string;
+  status?: string;
+  orders_submitted?: number;
+  fills_applied?: number;
+  broker_synced?: boolean;
+  targets?: Record<string, string>;
+  order_intents?: LiveSandboxOrderIntent[];
+  submitted_order_ids?: string[];
+  blocked_reasons?: string[];
+  sandbox_cash?: string;
+  sandbox_equity?: string;
+  cap_deployed?: string;
+  external_conflicts?: string[];
+};
+
+export type LiveSandboxSnapshot = {
+  generated_at?: string;
+  enabled?: boolean;
+  status?: string;
+  model_key?: string;
+  universe_id?: string;
+  allowed_symbols?: string[];
+  benchmark_symbol?: string;
+  order_prefix?: string;
+  broker_provider?: string | null;
+  live_account_id?: string | null;
+  max_live_allocation?: string;
+  max_order_notional?: string;
+  max_orders_per_day?: number;
+  max_daily_loss?: string;
+  min_order_notional?: string;
+  control_state?: LiveSandboxControlState | null;
+  sandbox_cash?: string;
+  sandbox_equity?: string;
+  cap_deployed?: string;
+  positions?: Position[];
+  broker_positions?: Position[];
+  open_orders?: Record<string, unknown>[];
+  recent_fills?: Fill[];
+  latest_cycle?: LiveSandboxCycle | null;
+  last_control_result?: {
+    request?: {
+      action?: string;
+    };
+    message?: string;
+  } | null;
+  blocked_reasons?: string[];
+  order_intents?: LiveSandboxOrderIntent[];
+  external_conflicts?: string[];
+  broker_error?: string | null;
 };
 
 export type ModelComparison = {
@@ -317,6 +418,15 @@ export type AutonomousLearningCandidate = {
   risk_adjusted_score?: number;
   gate_status?: string;
   status?: string;
+  recent_window_excess_share?: Record<string, number>;
+  late_entry_risk?: boolean;
+  late_entry_risk_reason?: string | null;
+  portfolio_governance_classification?: string;
+  champion_eligible?: boolean;
+  average_semiconductor_exposure?: number;
+  peak_semiconductor_exposure?: number;
+  material_semiconductor_exposure_ratio?: number;
+  portfolio_governance_notes?: string[];
 };
 
 export type AutonomousShadowArenaCandidate = {
@@ -336,6 +446,15 @@ export type AutonomousShadowArenaCandidate = {
   risk_adjusted_score?: number;
   gate_status?: string;
   status?: string;
+  recent_window_excess_share?: Record<string, number>;
+  late_entry_risk?: boolean;
+  late_entry_risk_reason?: string | null;
+  portfolio_governance_classification?: string;
+  champion_eligible?: boolean;
+  average_semiconductor_exposure?: number;
+  peak_semiconductor_exposure?: number;
+  material_semiconductor_exposure_ratio?: number;
+  portfolio_governance_notes?: string[];
   next_review_action?: string;
 };
 
@@ -368,6 +487,15 @@ export type AutonomousLearningLeaderboardEntry = {
   fold_count?: number;
   gate_status?: string;
   status?: string;
+  recent_window_excess_share?: Record<string, number>;
+  late_entry_risk?: boolean;
+  late_entry_risk_reason?: string | null;
+  portfolio_governance_classification?: string;
+  champion_eligible?: boolean;
+  average_semiconductor_exposure?: number;
+  peak_semiconductor_exposure?: number;
+  material_semiconductor_exposure_ratio?: number;
+  portfolio_governance_notes?: string[];
 };
 
 export type AutonomousLearningLeaderboard = {
@@ -600,6 +728,7 @@ export type DashboardSnapshot = {
     } | null;
   } | null;
   live_readiness?: Record<string, unknown> | null;
+  live_sandbox?: LiveSandboxSnapshot | null;
   completion_audit?: Record<string, unknown> | null;
   final_acceptance?: Record<string, unknown> | null;
   statement_reconciliation?: Record<string, unknown> | null;
@@ -614,10 +743,20 @@ export type ControlResult = {
   error?: string;
 };
 
+export type LiveSandboxControlResult = {
+  accepted?: boolean;
+  message?: string;
+  control_state?: LiveSandboxControlState;
+  canceled_order_ids?: string[];
+  errors?: string[];
+  error?: string;
+};
+
 export type ReplayReportKind = "comparison" | "strategy" | "other";
 
 export type ReplayReportMetricSnapshot = {
   strategy?: string;
+  universe?: string;
   net?: string;
   benchmark?: string;
   delta?: string;
@@ -641,6 +780,7 @@ export type ReplayReportSummary = {
   sizeBytes: number;
   runId?: string;
   range?: string;
+  universeId?: string;
   benchmark?: string;
   champion?: string;
   policy?: string;
@@ -649,6 +789,7 @@ export type ReplayReportSummary = {
   summary?: string;
   tags: string[];
   topMetric?: ReplayReportMetricSnapshot;
+  searchText?: string;
 };
 
 export type ReplayReportResponse = {

@@ -6,11 +6,32 @@ Scope: U.S. ETF research only. These reports use local SIP daily bars from `2016
 
 Winning-model criteria are documented in [`WINNING_MODEL_CRITERIA.md`](WINNING_MODEL_CRITERIA.md). Use that file as the source of truth for what qualifies as a real winner versus a high-return but fragile backtest.
 
+The bounded `$100` live sandbox policy is documented in
+[`LIVE_SANDBOX_PILOT.md`](LIVE_SANDBOX_PILOT.md). Use that file as the source of
+truth for arming variables, kill-switch behavior, and live-sandbox blocking
+rules.
+
 ## Paper-Tracking Activation
 
-As of `2026-06-02T01:57Z`, the Alpaca paper runtime is armed for fake trading only with `market_drawdown_circuit_breaker:top-semi-l126-qqq-dd08-risk0-cash`.
+As of `2026-06-05`, the Alpaca paper runtime paper-order champion is
+`benchmark_relative_strength_etf:grid-l252-t21-n2` in the `macro-defensive`
+universe. This is the broad ETF portfolio-candidate version of the model, not
+the semiconductor-champions result that shares the same model key. The active
+runtime must carry both the model key and `TRADING_APP_ACTIVE_MODEL_UNIVERSE_ID`
+so report lookup, dashboard evidence, default symbols, and paper-order targets
+resolve to the same macro-defensive replay.
 
-This is a paper-tracking promotion, not a live-money recommendation. The active paper model holds the stronger of `SOXX` and `SMH` by trailing 126-day return, moves fully to cash when `QQQ` is at least 8% below its trailing 252-day high, and evaluates on the monthly market-open paper schedule. Live trading remains disabled, and promotion to real money still requires forward paper evidence, operator review, and explicit approval.
+Promotion rationale: the macro-defensive replay showed approximately `+483.5%`
+full-period net return versus `+341.0%` for `SPY`, approximately `+142.5 pp`
+excess return, approximately `-19.0%` max drawdown, and no late-entry flag on
+the 21/63/126/252-day concentration checks. The semiconductor-champions version
+of the same key remains disqualified for champion status because its edge was
+dominated by the latest 252 trading days and it is not broad enough to be a
+whole-portfolio candidate.
+
+Previously, as of `2026-06-02T01:57Z`, the Alpaca paper runtime was armed for fake trading only with `market_drawdown_circuit_breaker:top-semi-l126-qqq-dd08-risk0-cash`.
+
+That was a paper-tracking promotion, not a live-money recommendation. The old active paper model held the stronger of `SOXX` and `SMH` by trailing 126-day return, moved fully to cash when `QQQ` was at least 8% below its trailing 252-day high, and evaluated on the monthly market-open paper schedule. Live trading remains disabled, and promotion to real money still requires forward paper evidence, operator review, and explicit approval.
 
 As of `2026-06-02T19:31Z`, the runtime supports multiple shadow ledgers and is tracking five non-broker challengers alongside the unchanged paper-order champion:
 

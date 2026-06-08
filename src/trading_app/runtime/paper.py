@@ -42,8 +42,14 @@ from trading_app.market_data import (
 )
 from trading_app.paper import PaperTradingService
 from trading_app.reporting import DailyReportGenerator, write_markdown_report
+from trading_app.research.run_replay_discovery import DISCOVERY_UNIVERSES
 from trading_app.risk import RiskConfig, RiskEngine
 from trading_app.runtime.health import RuntimeHealthEngine
+from trading_app.runtime.live_sandbox import (
+    LiveSandboxControlAction,
+    LiveSandboxControlRequest,
+    LiveSandboxRuntime,
+)
 from trading_app.runtime.models import (
     OperatorControlAction,
     OperatorControlRequest,
@@ -106,6 +112,10 @@ RESEARCH_RISK_MANAGED_SEMICONDUCTOR_KEY = (
     "risk_managed_semiconductor:vol-smh-v63-t020-off-cash"
 )
 RESEARCH_SEMICONDUCTOR_CHAMPIONS_UNIVERSE = ("QQQ", "XLK", "SMH", "SOXX")
+PROMOTED_MACRO_DEFENSIVE_BENCHMARK_RELATIVE_KEY = (
+    "benchmark_relative_strength_etf:grid-l252-t21-n2"
+)
+PROMOTED_MACRO_DEFENSIVE_UNIVERSE_ID = "macro-defensive"
 PAPER_SEMICONDUCTOR_SYMBOLS = ("SOXX", "SMH")
 DEFAULT_MAX_PAPER_SYMBOL_ALLOCATION = Decimal("0.35")
 DEFAULT_MAX_PAPER_SEMICONDUCTOR_ALLOCATION = Decimal("0.50")
@@ -151,6 +161,7 @@ class AlwaysOnPaperRuntimeConfig:
     feed: DataFeed = DataFeed.IEX
     output_dir: Path = Path("data/runtime")
     active_model_key: str = DEFAULT_PAPER_MODEL_KEY
+    active_model_universe_id: str | None = None
     shadow_challenger_model_key: str | None = None
     shadow_challenger_model_keys: tuple[str, ...] = ()
     auto_shadow_leaderboard_candidates: bool = True
@@ -188,6 +199,7 @@ class AlwaysOnPaperRuntime:
         control_center: RuntimeControlCenter | None = None,
         alert_engine: RuntimeAlertEngine | None = None,
         health_engine: RuntimeHealthEngine | None = None,
+        live_sandbox: LiveSandboxRuntime | None = None,
         clock: Callable[[], datetime] | None = None,
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
@@ -198,7 +210,10 @@ class AlwaysOnPaperRuntime:
         self.service = service
         self.latest_price_fetcher = latest_price_fetcher
         self.historical_bar_fetcher = historical_bar_fetcher
-        self.strategy = strategy or build_paper_strategy(self.config.active_model_key)
+        self.strategy = strategy or build_paper_strategy(
+            self.config.active_model_key,
+            universe_id=self.config.active_model_universe_id,
+        )
         self.shadow_challenger_model_keys = (
             self._resolved_shadow_challenger_model_keys()
         )
@@ -215,6 +230,7 @@ class AlwaysOnPaperRuntime:
         self.control_center = control_center or RuntimeControlCenter()
         self.alert_engine = alert_engine or RuntimeAlertEngine()
         self.health_engine = health_engine or RuntimeHealthEngine()
+        self.live_sandbox = live_sandbox or LiveSandboxRuntime.disabled()
         self._external_control_center = control_center is not None
         self.clock = clock or (lambda: datetime.now(tz=UTC))
         self.sleeper = sleeper or time.sleep
@@ -302,6 +318,7 @@ class AlwaysOnPaperRuntime:
             risk_engine=active_risk,
             config=resolved_config,
             persistence_store=RuntimePersistenceStore(resolved_config.output_dir),
+            live_sandbox=LiveSandboxRuntime.from_env(),
         )
 
     def run_forever(self, *, max_cycles: int | None = None) -> None:
@@ -371,6 +388,26 @@ class AlwaysOnPaperRuntime:
 
         paper_report = self._portfolio_report(now, events=events)
         self.persistence_store.persist_reconciliation(paper_report.reconciliation)
+
+        try:
+            live_cycle = self.live_sandbox.run_once(
+                as_of=now,
+                latest_prices=self._last_prices,
+                historical_bar_fetcher=self.historical_bar_fetcher,
+            )
+            self.persistence_store.persist_live_sandbox_cycle(live_cycle)
+            self.persistence_store.persist_live_sandbox_service_state(
+                self.live_sandbox.service
+            )
+        except Exception as error:
+            events.append(
+                self._event(
+                    now,
+                    RuntimeEventSeverity.ERROR,
+                    "live_sandbox",
+                    f"Live sandbox cycle failed: {error}",
+                )
+            )
         if not paper_report.reconciliation.reconciled:
             events.append(
                 self._event(
@@ -605,6 +642,9 @@ class AlwaysOnPaperRuntime:
         self.persistence_store.persist_service_state(self.service)
         runtime_snapshot = self.snapshot(as_of=now)
         self.persistence_store.persist_runtime_snapshot(runtime_snapshot)
+        self.persistence_store.persist_live_sandbox_snapshot(
+            runtime_snapshot.live_sandbox
+        )
         self.persistence_store.persist_dashboard_snapshot(
             self.dashboard_snapshot(as_of=now)
         )
@@ -659,6 +699,35 @@ class AlwaysOnPaperRuntime:
         self._invalidate_dashboard_snapshot_cache()
         return result
 
+    def apply_live_sandbox_control(
+        self,
+        request: LiveSandboxControlRequest | LiveSandboxControlAction | str,
+        *,
+        requested_by: str = "local-operator",
+        reason: str = "",
+        requested_at: datetime | None = None,
+    ):
+        """Apply a local operator control action to the live sandbox."""
+
+        result = self.live_sandbox.apply_control(
+            request,
+            requested_by=requested_by,
+            reason=reason,
+            requested_at=requested_at,
+        )
+        self.persistence_store.persist_live_sandbox_control_result(result)
+        self.persistence_store.persist_live_sandbox_service_state(
+            self.live_sandbox.service
+        )
+        self.persistence_store.persist_live_sandbox_snapshot(
+            self.live_sandbox.snapshot(
+                as_of=result.request.requested_at,
+                latest_prices=self._last_prices,
+            )
+        )
+        self._invalidate_dashboard_snapshot_cache()
+        return result
+
     def health_report(self, *, as_of: datetime | None = None):
         """Return the latest runtime health report."""
 
@@ -698,6 +767,10 @@ class AlwaysOnPaperRuntime:
             last_control_result=self._last_control_result,
             alerts=self._alerts,
             health_report=self._health_report,
+            live_sandbox=self.live_sandbox.snapshot(
+                as_of=now,
+                latest_prices=self._last_prices,
+            ),
         )
 
     def dashboard_snapshot(self, *, as_of: datetime | None = None):
@@ -847,6 +920,7 @@ class AlwaysOnPaperRuntime:
         )
         active_model_key = self._active_model_key()
         active_model_evidence = model_evidence_by_key.get(active_model_key)
+        active_model_label = _active_model_card_label(active_model_evidence)
         return OperatorDashboardSnapshot(
             generated_at=runtime_snapshot.as_of,
             mode="Alpaca Paper",
@@ -883,7 +957,7 @@ class AlwaysOnPaperRuntime:
             metrics=metrics,
             model_cards=(
                 DashboardModelCard(
-                    label="Champion",
+                    label=active_model_label,
                     strategy_id=self.strategy.strategy_id,
                     version=self.strategy.strategy_version,
                     state="paper",
@@ -893,7 +967,10 @@ class AlwaysOnPaperRuntime:
                         and active_model_evidence.risk_adjusted_score is not None
                         else 0.0
                     ),
-                    detail=_strategy_schedule_detail(self.config.strategy_schedule),
+                    detail=_active_model_card_detail(
+                        self.config.strategy_schedule,
+                        active_model_evidence,
+                    ),
                     evidence=active_model_evidence,
                 ),
                 *self._shadow_challenger_model_cards(
@@ -915,6 +992,7 @@ class AlwaysOnPaperRuntime:
                 runtime_snapshot=runtime_snapshot,
                 paper_report=paper_report,
             ),
+            live_sandbox=runtime_snapshot.live_sandbox,
             completion_audit=self.persistence_store.read_completion_audit_report(),
             final_acceptance=self.persistence_store.read_final_acceptance_report(),
             statement_reconciliation=statement_reconciliation,
@@ -944,6 +1022,10 @@ class AlwaysOnPaperRuntime:
                 "control_state": self.control_center.state,
                 "last_control_result": self._last_control_result,
                 "alerts": self._alerts,
+                "live_sandbox": self.live_sandbox.snapshot(
+                    as_of=self.clock(),
+                    latest_prices=self._last_prices,
+                ),
             }
             if self._health_report is not None:
                 updates["health_report"] = self._health_report
@@ -983,6 +1065,13 @@ class AlwaysOnPaperRuntime:
                 history=recovered.control_results,
             )
         self._last_control_result = self.control_center.last_result
+        self.live_sandbox.restore_state(
+            control_state=self.persistence_store.read_live_sandbox_control_state(),
+            submissions=self.persistence_store.read_live_sandbox_submissions(),
+            order_statuses=self.persistence_store.read_live_sandbox_order_statuses(),
+            fills=self.persistence_store.read_live_sandbox_fills(),
+            latest_cycle=self.persistence_store.read_live_sandbox_latest_cycle(),
+        )
         if recovered.last_cycle and _cycle_consumed_trade_date(recovered.last_cycle):
             local_date = recovered.last_cycle.as_of.astimezone(MARKET_TZ).date()
             self._last_trade_date = local_date
@@ -1054,16 +1143,37 @@ class AlwaysOnPaperRuntime:
             *self.shadow_challenger_model_keys,
         }
         leaderboard = self.persistence_store.read_autonomous_learning_leaderboard()
-        leaderboard_entries = {}
+        active_model_key = self._active_model_key()
+        active_universe_id = self.config.active_model_universe_id
+        leaderboard_entries: dict[str, AutonomousLearningLeaderboardEntry] = {}
+        leaderboard_entries_by_model_universe: dict[
+            tuple[str, str],
+            AutonomousLearningLeaderboardEntry,
+        ] = {}
         if leaderboard is not None:
             for entry in leaderboard.entries:
                 previous = leaderboard_entries.get(entry.model_key)
                 if previous is None or entry.rank < previous.rank:
                     leaderboard_entries[entry.model_key] = entry
+                universe_key = (entry.model_key, entry.universe_id)
+                previous_universe = leaderboard_entries_by_model_universe.get(
+                    universe_key,
+                )
+                if previous_universe is None or entry.rank < previous_universe.rank:
+                    leaderboard_entries_by_model_universe[universe_key] = entry
 
         evidence_by_key: dict[str, DashboardModelEvidence] = {}
         for model_key in sorted(model_keys):
-            entry = leaderboard_entries.get(model_key)
+            target_universe_id = (
+                active_universe_id if model_key == active_model_key else None
+            )
+            entry = (
+                leaderboard_entries_by_model_universe.get(
+                    (model_key, target_universe_id),
+                )
+                if target_universe_id
+                else leaderboard_entries.get(model_key)
+            )
             needs_comparison_row = (
                 entry is None
                 or entry.net_total_return is None
@@ -1074,10 +1184,16 @@ class AlwaysOnPaperRuntime:
             if needs_comparison_row:
                 comparison_row, comparison_path = self._latest_full_comparison_row(
                     model_key=model_key,
-                    universe_id=entry.universe_id if entry is not None else None,
+                    universe_id=(
+                        entry.universe_id
+                        if entry is not None
+                        else target_universe_id
+                    ),
                     latest_run_id=entry.latest_run_id if entry is not None else None,
+                    prefer_longest_window=target_universe_id is not None,
                     comparison_index=comparison_index,
                 )
+            comparison_universe_id = _comparison_path_universe_id(comparison_path)
             source = (
                 "leaderboard+full_comparison"
                 if entry is not None and comparison_row is not None
@@ -1095,7 +1211,7 @@ class AlwaysOnPaperRuntime:
                 )
             elif source == "missing":
                 note = "No leaderboard or full-period comparison evidence found."
-            evidence_by_key[model_key] = DashboardModelEvidence(
+            evidence = DashboardModelEvidence(
                 model_key=model_key,
                 source=source,
                 source_report=str(comparison_path) if comparison_path else None,
@@ -1115,7 +1231,11 @@ class AlwaysOnPaperRuntime:
                 ),
                 rank=entry.rank if entry is not None else None,
                 comparison_rank=_optional_int(comparison_row, "rank"),
-                universe_id=entry.universe_id if entry is not None else None,
+                universe_id=(
+                    entry.universe_id
+                    if entry is not None
+                    else comparison_universe_id or target_universe_id
+                ),
                 strategy_name=(
                     entry.strategy_name
                     if entry is not None
@@ -1171,8 +1291,61 @@ class AlwaysOnPaperRuntime:
                 gate_status=entry.gate_status if entry is not None else None,
                 status=entry.status if entry is not None else None,
                 latest_run_id=entry.latest_run_id if entry is not None else None,
+                late_entry_risk=(
+                    entry.late_entry_risk
+                    if entry is not None
+                    else _optional_bool(comparison_row, "late_entry_risk")
+                ),
+                late_entry_risk_reason=(
+                    entry.late_entry_risk_reason
+                    if entry is not None
+                    else _optional_string(comparison_row, "late_entry_risk_reason")
+                ),
+                portfolio_governance_classification=(
+                    entry.portfolio_governance_classification
+                    if entry is not None
+                    else _optional_string(
+                        comparison_row,
+                        "portfolio_governance_classification",
+                    )
+                ),
+                champion_eligible=(
+                    entry.champion_eligible
+                    if entry is not None
+                    else _optional_bool(comparison_row, "champion_eligible")
+                ),
+                average_semiconductor_exposure=(
+                    entry.average_semiconductor_exposure
+                    if entry is not None
+                    else _optional_float(
+                        comparison_row,
+                        "average_semiconductor_exposure",
+                    )
+                ),
+                peak_semiconductor_exposure=(
+                    entry.peak_semiconductor_exposure
+                    if entry is not None
+                    else _optional_float(comparison_row, "peak_semiconductor_exposure")
+                ),
+                material_semiconductor_exposure_ratio=(
+                    entry.material_semiconductor_exposure_ratio
+                    if entry is not None
+                    else _optional_float(
+                        comparison_row,
+                        "material_semiconductor_exposure_ratio",
+                    )
+                ),
+                portfolio_governance_notes=(
+                    entry.portfolio_governance_notes
+                    if entry is not None
+                    else _optional_string_tuple(
+                        comparison_row,
+                        "portfolio_governance_notes",
+                    )
+                ),
                 note=note,
             )
+            evidence_by_key[model_key] = _normalized_dashboard_evidence(evidence)
         return evidence_by_key
 
     def _autonomous_learning_cycle_for_dashboard(
@@ -1234,12 +1407,13 @@ class AlwaysOnPaperRuntime:
         universe_id: str | None,
         latest_run_id: str | None,
         expected_excess_return: float | None = None,
+        prefer_longest_window: bool = False,
         comparison_index: _FullComparisonIndex | None = None,
     ) -> tuple[dict[str, object] | None, Path | None]:
         index = comparison_index or self._full_comparison_index()
         if not index.rows_by_model:
             return None, None
-        if latest_run_id and universe_id:
+        if latest_run_id and universe_id and not prefer_longest_window:
             candidate_path = (
                 self._research_replay_dir()
                 / f"{latest_run_id}-{universe_id}-full-base-comparison.json"
@@ -1250,12 +1424,20 @@ class AlwaysOnPaperRuntime:
                 expected_excess_return,
             ):
                 return row, candidate_path
+        candidates: list[tuple[dict[str, object], Path]] = []
         for row, path in index.rows_by_model.get(model_key, ()):
+            if universe_id and _comparison_path_universe_id(path) != universe_id:
+                continue
             if _comparison_row_matches_excess(
                 row,
                 expected_excess_return,
             ):
+                if prefer_longest_window:
+                    candidates.append((row, path))
+                    continue
                 return row, path
+        if candidates:
+            return max(candidates, key=_comparison_window_sort_key)
         return None, None
 
     def _full_comparison_index(self) -> _FullComparisonIndex:
@@ -2304,15 +2486,16 @@ class AlwaysOnPaperRuntime:
         )
 
 
-def build_paper_strategy(model_key: str):
+def build_paper_strategy(model_key: str, *, universe_id: str | None = None):
     """Build an explicitly approved paper strategy by model key."""
 
     if model_key == DEFAULT_PAPER_MODEL_KEY:
         return MonthlySectorMomentumStrategy()
     benchmark_relative_match = _BENCHMARK_RELATIVE_MODEL_RE.match(model_key)
     if benchmark_relative_match:
+        universe = _paper_strategy_universe(universe_id)
         strategy = BenchmarkRelativeStrengthETFStrategy(
-            universe=RESEARCH_SEMICONDUCTOR_CHAMPIONS_UNIVERSE,
+            universe=universe,
             benchmark="SPY",
             lookback_days=int(benchmark_relative_match.group("lookback")),
             tracking_window_days=int(benchmark_relative_match.group("tracking")),
@@ -2376,6 +2559,7 @@ def build_paper_strategy(model_key: str):
 def default_symbols_for_paper_model(
     model_key: str,
     *,
+    active_model_universe_id: str | None = None,
     shadow_challenger_model_key: str | None = None,
     shadow_challenger_model_keys: tuple[str, ...] = (),
     leaderboard_path: Path | str | None = None,
@@ -2398,12 +2582,25 @@ def default_symbols_for_paper_model(
                     excluded_model_keys=shadow_keys,
                 ),
             )
-    symbols = set(_strategy_required_symbols(build_paper_strategy(model_key)))
+    symbols = set(
+        _strategy_required_symbols(
+            build_paper_strategy(model_key, universe_id=active_model_universe_id),
+        ),
+    )
     for shadow_model_key in shadow_keys:
         symbols.update(
             _strategy_required_symbols(build_paper_strategy(shadow_model_key))
         )
     return tuple(sorted(symbols))
+
+
+def _paper_strategy_universe(universe_id: str | None) -> tuple[str, ...]:
+    if not universe_id:
+        return RESEARCH_SEMICONDUCTOR_CHAMPIONS_UNIVERSE
+    try:
+        return DISCOVERY_UNIVERSES[universe_id]
+    except KeyError as error:
+        raise ValueError(f"unknown paper model universe id: {universe_id}") from error
 
 
 def leaderboard_shadow_challenger_model_keys(
@@ -2443,6 +2640,7 @@ def _leaderboard_entry_shadow_eligible(
         folds_positive
         and entry.full_delta > 0
         and stress_positive
+        and not entry.late_entry_risk
         and entry.worst_drawdown >= -0.35
     )
 
@@ -2482,7 +2680,14 @@ def _dedupe_model_keys(*model_keys: str | None) -> tuple[str, ...]:
 
 
 def _strategy_required_symbols(strategy) -> tuple[str, ...]:
-    return tuple(getattr(strategy, "required_symbols", strategy.universe))
+    required_symbols = getattr(strategy, "required_symbols", None)
+    if required_symbols is not None:
+        return tuple(required_symbols)
+    symbols = set(getattr(strategy, "universe", ()))
+    benchmark = getattr(strategy, "benchmark", None)
+    if benchmark:
+        symbols.add(benchmark)
+    return tuple(sorted(symbols))
 
 
 def _strategy_history_calendar_days(strategy) -> int:
@@ -2549,6 +2754,28 @@ def _comparison_row_for_model(
     model_key: str,
 ) -> dict[str, object] | None:
     return _comparison_rows_for_path(path).get(model_key)
+
+
+def _comparison_path_universe_id(path: Path | None) -> str | None:
+    if path is None:
+        return None
+    name = path.name.lower()
+    for universe_id in sorted(DISCOVERY_UNIVERSES, key=len, reverse=True):
+        if f"-{universe_id}-" in name or f"-{universe_id}." in name:
+            return universe_id
+    return None
+
+
+def _comparison_window_sort_key(
+    candidate: tuple[dict[str, object], Path],
+) -> tuple[int, int, int, str]:
+    row, path = candidate
+    start = _optional_date(row, "comparison_start_date")
+    end = _optional_date(row, "comparison_end_date")
+    duration_days = (end - start).days if start is not None and end is not None else -1
+    end_ordinal = end.toordinal() if end is not None else -1
+    start_ordinal = start.toordinal() if start is not None else 9999999
+    return (duration_days, end_ordinal, -start_ordinal, str(path))
 
 
 def _build_full_comparison_index(replay_dir: Path) -> _FullComparisonIndex:
@@ -2651,11 +2878,47 @@ def _optional_int(row: dict[str, object] | None, key: str) -> int | None:
         return None
 
 
+def _optional_bool(row: dict[str, object] | None, key: str) -> bool | None:
+    if row is None:
+        return None
+    value = row.get(key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes"}:
+            return True
+        if lowered in {"false", "0", "no"}:
+            return False
+    return None
+
+
 def _optional_string(row: dict[str, object] | None, key: str) -> str | None:
     if row is None:
         return None
     value = row.get(key)
     return str(value) if value not in (None, "") else None
+
+
+def _optional_string_tuple(row: dict[str, object] | None, key: str) -> tuple[str, ...]:
+    if row is None:
+        return ()
+    value = row.get(key)
+    if isinstance(value, str):
+        return (value,) if value else ()
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item) for item in value if item not in (None, ""))
+    return ()
+
+
+def _optional_date(row: dict[str, object] | None, key: str) -> date | None:
+    value = _optional_string(row, key)
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
 
 
 def _cycle_consumed_trade_date(cycle: RuntimeCycleResult) -> bool:
@@ -2686,6 +2949,120 @@ def _strategy_schedule_detail(schedule: StrategySchedule) -> str:
     if schedule == StrategySchedule.MARKET_OPEN:
         return "Market-open paper authority only"
     return "Daily-close authority only"
+
+
+def _active_model_card_label(evidence: DashboardModelEvidence | None) -> str:
+    if _evidence_blocks_champion_label(evidence):
+        return "Paper Authority"
+    return "Champion"
+
+
+def _active_model_card_detail(
+    schedule: StrategySchedule,
+    evidence: DashboardModelEvidence | None,
+) -> str:
+    detail = _strategy_schedule_detail(schedule)
+    if not _evidence_blocks_champion_label(evidence):
+        return detail
+    reason = _paper_authority_not_champion_reason(evidence)
+    return f"{detail}; {reason}"
+
+
+def _normalized_dashboard_evidence(
+    evidence: DashboardModelEvidence,
+) -> DashboardModelEvidence:
+    classification = evidence.portfolio_governance_classification
+    notes = evidence.portfolio_governance_notes
+    if _evidence_is_semiconductor_sleeve(evidence):
+        classification = "sector_sleeve"
+    elif _evidence_is_inferred_portfolio_candidate(evidence):
+        classification = "portfolio_candidate"
+        if not notes:
+            notes = ("Broad ETF universe; champion-eligible replay evidence.",)
+    candidate = evidence.model_copy(
+        update={
+            "portfolio_governance_classification": classification,
+            "portfolio_governance_notes": notes,
+        }
+    )
+    if not _evidence_blocks_champion_label(candidate):
+        return candidate
+    reason = _paper_authority_not_champion_reason(evidence)
+    if reason and reason not in notes:
+        notes = (*notes, reason)
+    return candidate.model_copy(
+        update={
+            "champion_eligible": False,
+            "portfolio_governance_notes": notes,
+        }
+    )
+
+
+def _evidence_blocks_champion_label(evidence: DashboardModelEvidence | None) -> bool:
+    if evidence is None:
+        return False
+    if evidence.late_entry_risk:
+        return True
+    if evidence.champion_eligible is False:
+        return True
+    classification = (evidence.portfolio_governance_classification or "").lower()
+    if classification == "unknown":
+        return True
+    if classification and classification not in {
+        "portfolio_candidate",
+        "portfolio_core",
+    }:
+        return True
+    return _evidence_is_semiconductor_sleeve(evidence)
+
+
+def _evidence_is_semiconductor_sleeve(evidence: DashboardModelEvidence) -> bool:
+    universe_id = (evidence.universe_id or "").lower()
+    strategy_name = (evidence.strategy_name or "").lower()
+    model_key = evidence.model_key.lower()
+    return (
+        universe_id == "semiconductor-champions"
+        or "semiconductor sleeve" in strategy_name
+        or "top-semi" in model_key
+        or model_key.startswith("risk_managed_semiconductor:")
+    )
+
+
+def _evidence_is_inferred_portfolio_candidate(
+    evidence: DashboardModelEvidence,
+) -> bool:
+    classification = (evidence.portfolio_governance_classification or "").lower()
+    universe_id = (evidence.universe_id or "").lower()
+    return (
+        evidence.champion_eligible is True
+        and classification in {"", "unknown"}
+        and not evidence.late_entry_risk
+        and not _evidence_is_semiconductor_sleeve(evidence)
+        and universe_id in {"macro-defensive", "broad-core", "sector-spdr"}
+    )
+
+
+def _paper_authority_not_champion_reason(
+    evidence: DashboardModelEvidence | None,
+) -> str:
+    if evidence is None:
+        return "champion eligibility evidence missing"
+    if evidence.late_entry_risk:
+        return "late-entry review blocks champion status"
+    if evidence.portfolio_governance_notes:
+        return evidence.portfolio_governance_notes[0]
+    if _evidence_is_semiconductor_sleeve(evidence):
+        return "semiconductor sleeve is not whole-portfolio champion eligible"
+    classification = (evidence.portfolio_governance_classification or "").replace(
+        "_",
+        " ",
+    )
+    if classification and classification not in {
+        "portfolio candidate",
+        "portfolio core",
+    }:
+        return f"{classification} is not whole-portfolio champion eligible"
+    return "not whole-portfolio champion eligible"
 
 
 def _is_market_hours(as_of: datetime) -> bool:

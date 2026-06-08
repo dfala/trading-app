@@ -32,6 +32,12 @@ from trading_app.paper import (
 )
 from trading_app.reporting import DailyTradingReport
 from trading_app.runtime.health import write_health_markdown_report
+from trading_app.runtime.live_sandbox import (
+    LiveSandboxControlResult,
+    LiveSandboxControlState,
+    LiveSandboxCycleResult,
+    LiveSandboxSnapshot,
+)
 from trading_app.runtime.models import (
     FunctionalCompletionAuditReport,
     OperatorControlResult,
@@ -775,6 +781,136 @@ class RuntimePersistenceStore:
 
     def persist_fill(self, fill: Fill) -> None:
         self._append_model(self.journal_dir / "fills.jsonl", fill)
+
+    def persist_live_sandbox_control_state(
+        self,
+        state: LiveSandboxControlState,
+    ) -> None:
+        self._write_model(self.state_dir / "live-sandbox-control-state.json", state)
+
+    def persist_live_sandbox_control_result(
+        self,
+        result: LiveSandboxControlResult,
+    ) -> None:
+        self.persist_live_sandbox_control_state(result.control_state)
+        self._append_model(
+            self.journal_dir / "live-sandbox-control-actions.jsonl",
+            result,
+        )
+
+    def persist_live_sandbox_cycle(
+        self,
+        cycle: LiveSandboxCycleResult | None,
+    ) -> None:
+        if cycle is None:
+            return
+        self._write_model(self.state_dir / "live-sandbox-last-cycle.json", cycle)
+        self._append_model(self.journal_dir / "live-sandbox-cycles.jsonl", cycle)
+
+    def persist_live_sandbox_snapshot(
+        self,
+        snapshot: LiveSandboxSnapshot | None,
+    ) -> None:
+        if snapshot is None:
+            return
+        self._write_model(
+            self.state_dir / "latest-live-sandbox-snapshot.json",
+            snapshot,
+        )
+
+    def persist_live_sandbox_submission(
+        self,
+        submission: PaperOrderSubmission,
+    ) -> None:
+        self._append_model(
+            self.journal_dir / "live-sandbox-submissions.jsonl",
+            submission,
+        )
+
+    def persist_live_sandbox_order_status(self, status: PaperOrderStatus) -> None:
+        self._append_model(
+            self.journal_dir / "live-sandbox-order-statuses.jsonl",
+            status,
+        )
+
+    def persist_live_sandbox_fill(self, fill: Fill) -> None:
+        self._append_model(self.journal_dir / "live-sandbox-fills.jsonl", fill)
+
+    def persist_live_sandbox_service_state(
+        self,
+        service: PaperTradingService | None,
+    ) -> None:
+        if service is None:
+            return
+        existing_submission_ids = {
+            submission.order.id
+            for submission in self._read_jsonl(
+                self.journal_dir / "live-sandbox-submissions.jsonl",
+                PaperOrderSubmission,
+            )
+        }
+        existing_fill_ids = {
+            fill.id
+            for fill in self._read_jsonl(
+                self.journal_dir / "live-sandbox-fills.jsonl",
+                Fill,
+            )
+        }
+        for submission in service.submissions:
+            if submission.order.id not in existing_submission_ids:
+                self.persist_live_sandbox_submission(submission)
+                existing_submission_ids.add(submission.order.id)
+        for status in service.order_statuses:
+            self.persist_live_sandbox_order_status(status)
+        for fill in service.fills:
+            if fill.id not in existing_fill_ids:
+                self.persist_live_sandbox_fill(fill)
+                existing_fill_ids.add(fill.id)
+
+    def read_live_sandbox_control_state(
+        self,
+    ) -> LiveSandboxControlState | None:
+        return self._read_model(
+            self.state_dir / "live-sandbox-control-state.json",
+            LiveSandboxControlState,
+        )
+
+    def read_live_sandbox_latest_cycle(
+        self,
+    ) -> LiveSandboxCycleResult | None:
+        return self._read_model(
+            self.state_dir / "live-sandbox-last-cycle.json",
+            LiveSandboxCycleResult,
+        )
+
+    def read_live_sandbox_snapshot(self) -> LiveSandboxSnapshot | None:
+        return self._read_model(
+            self.state_dir / "latest-live-sandbox-snapshot.json",
+            LiveSandboxSnapshot,
+        )
+
+    def read_live_sandbox_submissions(
+        self,
+    ) -> tuple[PaperOrderSubmission, ...]:
+        submissions = self._read_jsonl(
+            self.journal_dir / "live-sandbox-submissions.jsonl",
+            PaperOrderSubmission,
+        )
+        return tuple(_dedupe_by_order_id(submissions))
+
+    def read_live_sandbox_order_statuses(self) -> tuple[PaperOrderStatus, ...]:
+        order_statuses = self._read_jsonl(
+            self.journal_dir / "live-sandbox-order-statuses.jsonl",
+            PaperOrderStatus,
+        )
+        return tuple(_latest_order_statuses(order_statuses))
+
+    def read_live_sandbox_fills(self) -> tuple[Fill, ...]:
+        fills = self._read_jsonl(
+            self.journal_dir / "live-sandbox-fills.jsonl",
+            Fill,
+        )
+        return tuple(_dedupe_by_fill_id(fills))
 
     def persist_reconciliation(self, report: BrokerReconciliationReport) -> None:
         self._write_model(self.state_dir / "latest-reconciliation.json", report)

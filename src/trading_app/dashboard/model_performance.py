@@ -26,6 +26,11 @@ from trading_app.research.replay import (
     ReplayMetrics,
     StrategyReplayPolicy,
 )
+from trading_app.research.recent_windows import (
+    ReturnCurvePoint,
+    assess_recent_window_concentration,
+    late_entry_risk_summary,
+)
 from trading_app.research.run_replay_discovery import DISCOVERY_UNIVERSES
 from trading_app.runtime.paper import build_paper_strategy
 from trading_app.schemas import DataFeed, TradingModel, validate_symbol
@@ -37,7 +42,7 @@ DEFAULT_MODEL_PERFORMANCE_BAR_ROOT = PROJECT_ROOT / DEFAULT_BAR_ROOT
 DEFAULT_STARTING_CASH = Decimal("100000")
 DEFAULT_WARMUP_CALENDAR_DAYS = 540
 DEFAULT_WARMUP_TRADING_DAYS = 126
-MODEL_PERFORMANCE_CACHE_VERSION = "v3"
+MODEL_PERFORMANCE_CACHE_VERSION = "v5"
 
 
 class ModelStrategyProfile(TradingModel):
@@ -63,6 +68,17 @@ class ModelPerformancePoint(TradingModel):
     excess_return: float
 
 
+class ModelPerformanceRecentWindow(TradingModel):
+    trading_days: int = Field(ge=1)
+    start_date: date
+    end_date: date
+    model_return_delta: float
+    benchmark_return_delta: float
+    excess_return_delta: float
+    excess_contribution_share: float | None = None
+    late_entry_risk: bool = False
+
+
 class ModelPerformancePayload(TradingModel):
     model_key: str = Field(min_length=1)
     strategy_id: str = Field(min_length=1)
@@ -83,6 +99,9 @@ class ModelPerformancePayload(TradingModel):
     window_policy: str = Field(min_length=1)
     available_window_count: int = Field(ge=1)
     strategy_profile: ModelStrategyProfile | None = None
+    recent_windows: tuple[ModelPerformanceRecentWindow, ...] = ()
+    late_entry_risk: bool = False
+    late_entry_risk_summary: str | None = None
     metrics: ReplayMetrics
     points: tuple[ModelPerformancePoint, ...]
 
@@ -151,6 +170,11 @@ def build_model_performance_payload(
         bar_root=Path(bar_root),
         generated_at=generated_at,
     )
+    points = _performance_points(result.equity_curve, result.config.starting_cash)
+    recent_windows = _recent_window_payloads(points)
+    recent_summary = late_entry_risk_summary(
+        assess_recent_window_concentration(_return_curve_points(points))
+    )
     payload = ModelPerformancePayload(
         model_key=clean_model_key,
         strategy_id=clean_model_key.split(":", 1)[0],
@@ -171,8 +195,11 @@ def build_model_performance_payload(
         window_policy="longest stored full-period comparison for this model",
         available_window_count=len(sources),
         strategy_profile=_strategy_profile(definition, symbol_universe),
+        recent_windows=recent_windows,
+        late_entry_risk=recent_summary is not None,
+        late_entry_risk_summary=recent_summary,
         metrics=result.metrics,
-        points=_performance_points(result.equity_curve, result.config.starting_cash),
+        points=points,
     )
     _write_cached_payload(cache_path, payload)
     return payload
@@ -480,6 +507,39 @@ def _performance_points(
             )
         )
     return tuple(points)
+
+
+def _return_curve_points(
+    points: tuple[ModelPerformancePoint, ...],
+) -> tuple[ReturnCurvePoint, ...]:
+    return tuple(
+        ReturnCurvePoint(
+            trading_date=point.trading_date,
+            model_return=point.model_return,
+            benchmark_return=point.benchmark_return,
+            excess_return=point.excess_return,
+        )
+        for point in points
+    )
+
+
+def _recent_window_payloads(
+    points: tuple[ModelPerformancePoint, ...],
+) -> tuple[ModelPerformanceRecentWindow, ...]:
+    assessments = assess_recent_window_concentration(_return_curve_points(points))
+    return tuple(
+        ModelPerformanceRecentWindow(
+            trading_days=assessment.trading_days,
+            start_date=assessment.start_date,
+            end_date=assessment.end_date,
+            model_return_delta=assessment.model_return_delta,
+            benchmark_return_delta=assessment.benchmark_return_delta,
+            excess_return_delta=assessment.excess_return_delta,
+            excess_contribution_share=assessment.excess_contribution_share,
+            late_entry_risk=assessment.late_entry_risk,
+        )
+        for assessment in assessments
+    )
 
 
 def _missing_symbols(symbols: tuple[str, ...], bars) -> tuple[str, ...]:

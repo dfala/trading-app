@@ -11,7 +11,8 @@ A model is a serious winner only if it can answer all of these questions well:
 - Does it win across validation folds instead of one cherry-picked period?
 - Does it still work after stress slippage and realistic trading friction?
 - Does it keep max drawdown within the current risk target?
-- Does it remain strong over the latest 3, 6, and 12 months without depending on only the latest 21 or 63 trading days?
+- Does it remain strong over the latest 3, 6, and 12 months without depending on only the latest 21/63/126/252 trading days?
+- Is it broad enough to be considered a portfolio candidate, or is it only a capped sector sleeve under `research/PORTFOLIO_GOVERNANCE.md`?
 - Can the runtime actually build it, shadow-track it, explain its targets, and enforce rollback/kill-switch controls?
 
 ## Mandatory Gates
@@ -25,6 +26,7 @@ Use these gates before recommending a champion change:
 - Max drawdown is acceptable for the current strategy class.
 - Beats or closely challenges the current champion on risk-adjusted evidence.
 - No single recent window explains most of the model's apparent edge.
+- Portfolio-governance classification is `portfolio_candidate` before champion or pilot review.
 - Reproducible in the shared replay harness using point-in-time data.
 - Runtime adapter support exists for paper/shadow tracking.
 
@@ -38,10 +40,16 @@ Before promotion, explicitly check:
 - Latest 63 trading days.
 - Latest 126 trading days.
 - Latest 252 trading days.
-- Whether the latest 21/63-day window explains an outsized share of the full-period excess return.
+- Whether the latest 21/63/126/252-day window explains an outsized share of the full-period excess return.
 - Whether 3-, 6-, and 12-month returns are consistent or whether the model only looks good after a sharp recent acceleration.
 
-If a model's edge is concentrated in the most recent 1-3 months, keep it in shadow tracking or late-entry review instead of promoting it directly.
+If a model's edge is concentrated in the most recent 1-12 months, keep it in shadow tracking or late-entry review instead of promoting it directly.
+
+## Portfolio Governance
+
+Use `research/PORTFOLIO_GOVERNANCE.md` as the source of truth for classifying a replay candidate as a whole-portfolio candidate, capped sector sleeve, late-entry review item, research-only benchmark, or unknown legacy result.
+
+Sector sleeves can move quickly into shadow tracking during the paper phase, but they cannot become the paper champion or live pilot by themselves. They must first be composed into a capped portfolio allocation and compared against the relevant sector benchmarks.
 
 ## Paper Phase Bias
 
