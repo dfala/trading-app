@@ -2254,68 +2254,87 @@ a.row:focus-visible,
 .area-chart .end-dot.ai  { fill: var(--ai);  }
 .area-chart .end-dot.market { fill: var(--fg-muted); }
 
-.live-chart,
-.live-chart__empty {
-  width: 100%;
-  min-height: 260px;
+/* Live sandbox graph — rendered in the home equity-hero grammar: a
+   number-forward headline + a single minimal area chart. Mirrors .hero so it
+   sits full-width and left-aligned inside the surface body. */
+.live-hero {
+  display: grid;
+  gap: var(--s-5);
 }
 
-.live-chart {
+.live-hero__lead {
+  display: grid;
+  gap: 8px;
+}
+
+.live-hero__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.live-hero__context b {
+  margin-right: 7px;
+  color: var(--fg-faint);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-hero__chart {
+  position: relative;
+  width: 100%;
+  height: clamp(280px, 26vw, 380px);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--raised);
   overflow: hidden;
 }
 
+/* preserveAspectRatio="none" fills the box; strokes use non-scaling-stroke and
+   the end marker is an HTML overlay, so nothing renders distorted. */
 .live-chart__svg {
-  height: 260px;
-}
-
-.live-chart__cap {
-  stroke: var(--fg-faint);
-  stroke-width: 1.2;
-  stroke-dasharray: 5 5;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 .live-chart__empty {
   display: grid;
   place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
   color: var(--fg-muted);
+  font-family: var(--font-mono);
   font-size: var(--t-small);
 }
 
-.live-chart__legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  margin-top: 10px;
-  color: var(--fg-muted);
-  font-size: var(--t-small);
-}
+.live-chart__area--pos { fill: url(#liveFillPos); }
+.live-chart__area--neg { fill: url(#liveFillNeg); }
 
-.live-chart__legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
+.live-chart__line--pos { stroke: var(--pos); stroke-width: 2.25; fill: none; }
+.live-chart__line--neg { stroke: var(--neg); stroke-width: 2.25; fill: none; }
 
-.legend-dot {
-  width: 9px;
-  height: 9px;
+.live-chart__end-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
   border-radius: 999px;
-  display: inline-block;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 3px var(--raised);
+  pointer-events: none;
 }
 
-.legend-dot--equity { background: var(--pos); }
-.legend-dot--deployed { background: var(--ai); }
-
-.legend-line {
-  width: 18px;
-  height: 0;
-  border-top: 1px dashed var(--fg-faint);
-  display: inline-block;
-}
+.live-chart__end-dot--pos { background: var(--pos); }
+.live-chart__end-dot--neg { background: var(--neg); }
 
 .model-performance-stats {
   display: grid;

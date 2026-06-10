@@ -230,6 +230,7 @@ def test_runtime_watchdog_launchd_installer_checks_fixed_backend() -> None:
 
     assert 'LABEL="com.trading-app.runtime-watchdog"' in text
     assert "StartInterval" in text
+    assert 'LOG_DIR="${HOME}/Library/Logs/trading-app"' in text
     assert "runtime-watchdog.launchd.out.log" in text
     assert "launchctl kickstart" in text
     assert "run_runtime_watchdog.sh" in text
@@ -240,6 +241,7 @@ def test_runtime_watchdog_launchd_installer_checks_fixed_backend() -> None:
     assert "--restart" in wrapper
     assert "latest-runtime-watchdog-report.json" in status
     assert "Launchd env file installed" in status
+    assert 'LOG_DIR="${HOME}/Library/Logs/trading-app"' in status
     assert "runtime-watchdog.env" in uninstaller
     assert "run_runtime_watchdog.sh" in uninstaller
     assert "ALPACA_SECRET_KEY=" not in text
@@ -270,6 +272,7 @@ def test_autonomous_learning_launchd_installer_runs_research_service() -> None:
     assert "KeepAlive" in text
     assert "<true/>" in text
     assert "ThrottleInterval" in text
+    assert 'LOG_DIR="${HOME}/Library/Logs/trading-app"' in text
     assert "autonomous-learning.launchd.out.log" in text
     assert "autonomous-learning.launchd.err.log" in text
     assert "install -m 600" in text
@@ -315,5 +318,6 @@ def test_autonomous_learning_status_reports_state_and_logs() -> None:
     assert "latest-learning-cycle.json" in text
     assert "next_historical_hypothesis_id" in text
     assert "historical_hypothesis_counts" in text
+    assert 'LOG_DIR="${HOME}/Library/Logs/trading-app"' in text
     assert "autonomous-learning.launchd.out.log" in text
     assert "autonomous-learning.launchd.err.log" in text

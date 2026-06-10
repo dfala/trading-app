@@ -7,6 +7,7 @@ PLIST_PATH="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 APP_SUPPORT_DIR="${HOME}/Library/Application Support/trading-app"
 LAUNCHD_ENV_FILE="${APP_SUPPORT_DIR}/autonomous-learning.env"
 LAUNCHD_WRAPPER="${APP_SUPPORT_DIR}/run_autonomous_learning_service.sh"
+LOG_DIR="${HOME}/Library/Logs/trading-app"
 STATE_FILE="${ROOT_DIR}/data/runtime/learning/latest-autonomous-service-state.json"
 LATEST_CYCLE="${ROOT_DIR}/data/runtime/learning/latest-learning-cycle.json"
 PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
@@ -34,6 +35,7 @@ else
 fi
 echo "Service state: ${STATE_FILE}"
 echo "Latest learning cycle: ${LATEST_CYCLE}"
+echo "Launchd logs: ${LOG_DIR}"
 
 echo
 echo "launchctl:"
@@ -73,8 +75,8 @@ fi
 
 echo
 echo "Recent stdout log:"
-tail -40 "${ROOT_DIR}/data/runtime/logs/autonomous-learning.launchd.out.log" 2>/dev/null || true
+tail -40 "${LOG_DIR}/autonomous-learning.launchd.out.log" 2>/dev/null || true
 
 echo
 echo "Recent stderr log:"
-tail -40 "${ROOT_DIR}/data/runtime/logs/autonomous-learning.launchd.err.log" 2>/dev/null || true
+tail -40 "${LOG_DIR}/autonomous-learning.launchd.err.log" 2>/dev/null || true

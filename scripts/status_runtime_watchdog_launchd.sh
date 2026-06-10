@@ -7,6 +7,7 @@ PLIST_PATH="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 APP_SUPPORT_DIR="${HOME}/Library/Application Support/trading-app"
 LAUNCHD_ENV_FILE="${APP_SUPPORT_DIR}/runtime-watchdog.env"
 LAUNCHD_WRAPPER="${APP_SUPPORT_DIR}/run_runtime_watchdog.sh"
+LOG_DIR="${HOME}/Library/Logs/trading-app"
 
 echo "Label: ${LABEL}"
 echo "Plist: ${PLIST_PATH}"
@@ -36,8 +37,8 @@ cat "${ROOT_DIR}/data/runtime/state/latest-runtime-watchdog-report.json" 2>/dev/
 
 echo
 echo "Recent stdout log:"
-tail -40 "${ROOT_DIR}/data/runtime/logs/runtime-watchdog.launchd.out.log" 2>/dev/null || true
+tail -40 "${LOG_DIR}/runtime-watchdog.launchd.out.log" 2>/dev/null || true
 
 echo
 echo "Recent stderr log:"
-tail -40 "${ROOT_DIR}/data/runtime/logs/runtime-watchdog.launchd.err.log" 2>/dev/null || true
+tail -40 "${LOG_DIR}/runtime-watchdog.launchd.err.log" 2>/dev/null || true

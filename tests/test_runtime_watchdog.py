@@ -94,3 +94,74 @@ def test_runtime_watchdog_fails_without_restart_when_api_unavailable(
     assert report.status == RuntimePreflightStatus.FAILED
     assert report.action == RuntimeWatchdogAction.NONE
     assert not report.restart_requested
+
+
+def test_runtime_watchdog_reports_health_warning_without_restart_when_fresh(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    restarted: list[str] = []
+    monkeypatch.setattr(
+        "trading_app.runtime.watchdog._fetch_snapshot",
+        lambda _url: {
+            "health_report": {
+                "as_of": (NOW - timedelta(minutes=1)).isoformat(),
+                "status": "critical",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "trading_app.runtime.watchdog._restart_launchd",
+        lambda label: restarted.append(label) or RuntimeWatchdogAction.RESTARTED,
+    )
+
+    report = run_watchdog(
+        RuntimeWatchdogConfig(
+            output_dir=tmp_path,
+            launchd_label="com.example.paper",
+            restart=True,
+        ),
+        as_of=NOW,
+    )
+
+    assert report.status == RuntimePreflightStatus.WARNING
+    assert report.action == RuntimeWatchdogAction.NONE
+    assert not report.restart_requested
+    assert restarted == []
+    runtime_health = [check for check in report.checks if check.name == "runtime_health"]
+    assert runtime_health[0].status == RuntimePreflightStatus.WARNING
+
+
+def test_runtime_watchdog_can_opt_into_restarting_on_health_failure(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    restarted: list[str] = []
+    monkeypatch.setattr(
+        "trading_app.runtime.watchdog._fetch_snapshot",
+        lambda _url: {
+            "health_report": {
+                "as_of": (NOW - timedelta(minutes=1)).isoformat(),
+                "status": "critical",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "trading_app.runtime.watchdog._restart_launchd",
+        lambda label: restarted.append(label) or RuntimeWatchdogAction.RESTARTED,
+    )
+
+    report = run_watchdog(
+        RuntimeWatchdogConfig(
+            output_dir=tmp_path,
+            launchd_label="com.example.paper",
+            restart=True,
+            restart_on_runtime_health_failure=True,
+        ),
+        as_of=NOW,
+    )
+
+    assert report.status == RuntimePreflightStatus.WARNING
+    assert report.action == RuntimeWatchdogAction.RESTARTED
+    assert report.restart_requested
+    assert restarted == ["com.example.paper"]

@@ -131,6 +131,28 @@ def test_live_sandbox_external_position_conflict_blocks_autonomy() -> None:
     assert any("External live position" in reason for reason in cycle.blocked_reasons)
 
 
+def test_live_sandbox_successful_broker_sync_clears_stale_broker_error() -> None:
+    runtime, _ = make_live_sandbox_runtime()
+    runtime.broker_error = "temporary broker disconnect"
+    runtime.apply_control("enable_live_autonomy", requested_at=MARKET_HOURS)
+
+    cycle = runtime.run_once(
+        as_of=MARKET_HOURS,
+        latest_prices=latest_prices(MARKET_HOURS),
+        historical_bar_fetcher=FixtureHistoricalBarFetcher(source="live-test"),
+    )
+    snapshot = runtime.snapshot(
+        as_of=datetime(2026, 6, 2, 14, 1, tzinfo=UTC),
+        latest_prices=latest_prices(datetime(2026, 6, 2, 14, 1, tzinfo=UTC)),
+    )
+
+    assert cycle.status != LiveSandboxStatus.BROKER_UNAVAILABLE
+    assert snapshot.broker_error is None
+    assert not any(
+        "broker unavailable" in reason for reason in snapshot.blocked_reasons
+    )
+
+
 def make_live_sandbox_runtime() -> tuple[
     LiveSandboxRuntime,
     InMemoryPaperBrokerAdapter,

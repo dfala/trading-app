@@ -397,6 +397,7 @@ class LiveSandboxRuntime:
                     as_of=as_of,
                 )
                 broker_synced = True
+                self.broker_error = None
             except Exception as error:
                 self.broker_error = str(error)
 
@@ -499,6 +500,7 @@ class LiveSandboxRuntime:
                         prefix=self.config.order_prefix,
                     )
                 )
+                self.broker_error = None
             except Exception as error:
                 self.broker_error = str(error)
         latest_cycle = self._latest_cycle

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from pydantic import AwareDatetime, Field, field_validator
 
 from trading_app.alpaca_credentials import resolve_alpaca_credentials
+from trading_app.alpaca_http import install_default_alpaca_http_timeout
 from trading_app.schemas import DataFeed, Price, TradingModel, validate_symbol
 
 
@@ -94,6 +95,7 @@ class AlpacaLatestPriceFetcher:
         self.source = source
         if client is not None:
             self._client = client
+            install_default_alpaca_http_timeout(self._client)
             return
 
         resolved_api_key, resolved_secret_key = resolve_alpaca_credentials(
@@ -107,6 +109,7 @@ class AlpacaLatestPriceFetcher:
             api_key=resolved_api_key,
             secret_key=resolved_secret_key,
         )
+        install_default_alpaca_http_timeout(self._client)
 
     def fetch_latest_prices(
         self,

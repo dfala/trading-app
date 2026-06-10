@@ -9,6 +9,7 @@ from typing import Protocol
 import pandas as pd
 
 from trading_app.alpaca_credentials import resolve_alpaca_credentials
+from trading_app.alpaca_http import install_default_alpaca_http_timeout
 from trading_app.schemas import (
     AdjustmentType,
     BarTimeframe,
@@ -100,6 +101,7 @@ class AlpacaHistoricalBarFetcher:
         self.source = source
         if client is not None:
             self._client = client
+            install_default_alpaca_http_timeout(self._client)
             return
 
         resolved_api_key, resolved_secret_key = resolve_alpaca_credentials(
@@ -113,6 +115,7 @@ class AlpacaHistoricalBarFetcher:
             api_key=resolved_api_key,
             secret_key=resolved_secret_key,
         )
+        install_default_alpaca_http_timeout(self._client)
 
     def fetch_daily_bars(
         self,

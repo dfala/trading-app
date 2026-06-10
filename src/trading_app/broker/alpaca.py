@@ -10,6 +10,7 @@ from trading_app.alpaca_credentials import (
     alpaca_paper_boundary_violations,
     resolve_alpaca_credentials,
 )
+from trading_app.alpaca_http import install_default_alpaca_http_timeout
 from trading_app.broker.models import (
     BrokerOrderState,
     BrokerPortfolioState,
@@ -40,6 +41,7 @@ class AlpacaPaperBrokerAdapter:
         _require_live_trading_disabled()
         if client is not None:
             self._client = client
+            install_default_alpaca_http_timeout(self._client)
             return
 
         resolved_api_key, resolved_secret_key = resolve_alpaca_credentials(
@@ -54,6 +56,7 @@ class AlpacaPaperBrokerAdapter:
             secret_key=resolved_secret_key,
             paper=True,
         )
+        install_default_alpaca_http_timeout(self._client)
 
     def submit_order(self, order: Order) -> BrokerOrderState:
         request = _to_alpaca_order_request(order)
@@ -145,6 +148,7 @@ class AlpacaLiveBrokerAdapter(AlpacaPaperBrokerAdapter):
             raise ValueError("explicit live-risk confirmation is required")
         if client is not None:
             self._client = client
+            install_default_alpaca_http_timeout(self._client)
             return
 
         resolved_api_key, resolved_secret_key = resolve_alpaca_credentials(
@@ -159,6 +163,7 @@ class AlpacaLiveBrokerAdapter(AlpacaPaperBrokerAdapter):
             secret_key=resolved_secret_key,
             paper=False,
         )
+        install_default_alpaca_http_timeout(self._client)
 
 
 def _require_live_trading_disabled() -> None:

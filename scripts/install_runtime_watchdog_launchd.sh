@@ -8,6 +8,7 @@ PLIST_PATH="${LAUNCH_AGENTS_DIR}/${LABEL}.plist"
 APP_SUPPORT_DIR="${HOME}/Library/Application Support/trading-app"
 LAUNCHD_ENV_FILE="${APP_SUPPORT_DIR}/runtime-watchdog.env"
 LAUNCHD_WRAPPER="${APP_SUPPORT_DIR}/run_runtime_watchdog.sh"
+LOG_DIR="${HOME}/Library/Logs/trading-app"
 ENV_FILE="${ROOT_DIR}/.env"
 START_INTERVAL_SECONDS="60"
 START_SERVICE="yes"
@@ -74,7 +75,7 @@ if [[ "${START_SERVICE}" == "yes" ]]; then
   launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
 fi
 
-mkdir -p "${LAUNCH_AGENTS_DIR}" "${APP_SUPPORT_DIR}" "${ROOT_DIR}/data/runtime/logs"
+mkdir -p "${LAUNCH_AGENTS_DIR}" "${APP_SUPPORT_DIR}" "${LOG_DIR}"
 install -m 600 "${ENV_FILE}" "${LAUNCHD_ENV_FILE}"
 {
   cat <<EOF
@@ -147,9 +148,9 @@ xml_escape() {
   <key>KeepAlive</key>
   <false/>
   <key>StandardOutPath</key>
-  <string>${ROOT_DIR}/data/runtime/logs/runtime-watchdog.launchd.out.log</string>
+  <string>${LOG_DIR}/runtime-watchdog.launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>${ROOT_DIR}/data/runtime/logs/runtime-watchdog.launchd.err.log</string>
+  <string>${LOG_DIR}/runtime-watchdog.launchd.err.log</string>
 </dict>
 </plist>
 EOF

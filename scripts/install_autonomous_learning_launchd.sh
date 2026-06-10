@@ -8,6 +8,7 @@ PLIST_PATH="${LAUNCH_AGENTS_DIR}/${LABEL}.plist"
 APP_SUPPORT_DIR="${HOME}/Library/Application Support/trading-app"
 LAUNCHD_ENV_FILE="${APP_SUPPORT_DIR}/autonomous-learning.env"
 LAUNCHD_WRAPPER="${APP_SUPPORT_DIR}/run_autonomous_learning_service.sh"
+LOG_DIR="${HOME}/Library/Logs/trading-app"
 ENV_FILE="${ROOT_DIR}/.env"
 OUTPUT_DIR="data/research/replay"
 STATUS_DIR="data/runtime/learning"
@@ -158,7 +159,7 @@ if [[ "${START_SERVICE}" == "yes" ]]; then
   launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
 fi
 
-mkdir -p "${LAUNCH_AGENTS_DIR}" "${APP_SUPPORT_DIR}" "${STATUS_DIR}" \
+mkdir -p "${LAUNCH_AGENTS_DIR}" "${APP_SUPPORT_DIR}" "${LOG_DIR}" "${STATUS_DIR}" \
   "${ROOT_DIR}/data/runtime/logs"
 install -m 600 "${ENV_FILE}" "${LAUNCHD_ENV_FILE}"
 
@@ -261,9 +262,9 @@ xml_escape() {
   <key>ThrottleInterval</key>
   <integer>60</integer>
   <key>StandardOutPath</key>
-  <string>${ROOT_DIR}/data/runtime/logs/autonomous-learning.launchd.out.log</string>
+  <string>${LOG_DIR}/autonomous-learning.launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>${ROOT_DIR}/data/runtime/logs/autonomous-learning.launchd.err.log</string>
+  <string>${LOG_DIR}/autonomous-learning.launchd.err.log</string>
 </dict>
 </plist>
 EOF
@@ -276,6 +277,7 @@ fi
 echo "Installed plist: ${PLIST_PATH}"
 echo "Installed service wrapper: ${LAUNCHD_WRAPPER}"
 echo "Installed launchd env file: ${LAUNCHD_ENV_FILE}"
+echo "Launchd logs: ${LOG_DIR}"
 echo "Service state: ${STATUS_DIR}/latest-autonomous-service-state.json"
 echo "Research reports: ${OUTPUT_DIR}"
 

@@ -89,14 +89,52 @@ describe("DashboardClient", () => {
         expect.any(Object),
       ),
     );
-    const [, init] = fetchMock.mock.calls[0] as unknown as [
-      RequestInfo | URL,
-      RequestInit,
-    ];
-    const body = JSON.parse(String(init.body));
+    const controlCall = fetchMock.mock.calls.find(
+      (call) => call[0] === "/api/live-sandbox/control",
+    ) as unknown as [RequestInfo | URL, RequestInit];
+    const body = JSON.parse(String(controlCall[1].body));
 
     expect(screen.getByText("$100 autonomous pilot with a hard kill switch.")).toBeVisible();
     expect(body.action).toBe("enable_live_autonomy");
+  });
+
+  it("does not color the configured live sandbox pill as a danger state", () => {
+    render(
+      <DashboardClient initialSnapshot={sampleSnapshot} autoRefresh={false} />,
+    );
+    const nav = within(screen.getByRole("navigation"));
+    fireEvent.click(nav.getByRole("button", { name: /\$\s*Live/i }));
+
+    const configured = screen.getByText("Configured");
+
+    expect(configured).toHaveClass("pill--ai");
+    expect(configured).not.toHaveClass("pill--danger");
+  });
+
+  it("renders live sandbox chart scale, series, and current values", () => {
+    const { container } = render(
+      <DashboardClient initialSnapshot={sampleSnapshot} autoRefresh={false} />,
+    );
+    const nav = within(screen.getByRole("navigation"));
+    fireEvent.click(nav.getByRole("button", { name: /\$\s*Live/i }));
+
+    expect(
+      screen.getByRole("img", {
+        name: "Live sandbox equity and deployed capital",
+      }),
+    ).toBeVisible();
+    expect(container.querySelector("[data-live-equity-line]")).not.toBeNull();
+
+    expect(
+      container.querySelector("[data-live-equity-value]"),
+    ).toHaveTextContent("$100.00");
+
+    const breakdown = screen.getByLabelText("Live sandbox capital breakdown");
+    expect(breakdown).toHaveTextContent("Deployed");
+    expect(breakdown).toHaveTextContent("Cash");
+    expect(breakdown).toHaveTextContent("Cap");
+    expect(breakdown).toHaveTextContent("$0.00");
+    expect(breakdown).toHaveTextContent("$100.00");
   });
 
   it("does not leak a bare open-order count in the plain-English summary", () => {
@@ -530,7 +568,10 @@ describe("DashboardClient", () => {
         screen.getByRole("heading", { name: "test_strategy_1:v1" }),
       ).toBeVisible();
     });
-    expect(String(fetchMock.mock.calls[0][0])).toBe(
+    const perfCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).startsWith("/api/model-performance"),
+    );
+    expect(String(perfCall?.[0])).toBe(
       "/api/model-performance?model_key=test_strategy_1%3Av1&universe_id=test-universe",
     );
     expect(screen.getByText("Return curve over time")).toBeVisible();
@@ -1064,19 +1105,23 @@ describe("DashboardClient", () => {
   });
 
   it("sends operator controls through the Next proxy route", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        Response.json({
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/live-sandbox-history")) {
+        return Response.json({ generated_at: "", source: "", points: [] });
+      }
+      if (url === "/api/control") {
+        return Response.json({
           status: "accepted",
           message: "Paper trading is paused.",
           control_state: {
             ...sampleSnapshot.control_state,
             paused: true,
           },
-        }),
-      )
-      .mockResolvedValueOnce(Response.json(sampleSnapshot));
+        });
+      }
+      return Response.json(sampleSnapshot);
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -1094,7 +1139,10 @@ describe("DashboardClient", () => {
         }),
       );
     });
-    const controlBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const controlCall = fetchMock.mock.calls.find(
+      (call) => call[0] === "/api/control",
+    ) as unknown as [RequestInfo | URL, RequestInit];
+    const controlBody = JSON.parse(String(controlCall[1].body));
     expect(controlBody.action).toBe("pause_runtime");
     expect(controlBody.requested_by).toBe("next-dashboard");
     expect(await screen.findByText("Paper trading is paused.")).toBeVisible();

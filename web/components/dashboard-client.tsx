@@ -12,6 +12,7 @@ import type {
   Fill,
   LiveSandboxControlAction,
   LiveSandboxControlResult,
+  LiveSandboxHistoryResponse,
   ModelComparison,
   ModelPerformanceResponse,
   ModelStrategyProfile,
@@ -75,6 +76,25 @@ type LiveSandboxHistoryPoint = {
   deployed: number;
   cash: number;
 };
+
+type LiveRange = "15M" | "1H" | "1D" | "1W" | "ALL";
+
+const LIVE_RANGES: readonly LiveRange[] = ["15M", "1H", "1D", "1W", "ALL"];
+
+const LIVE_RANGE_DESCRIPTION: Record<LiveRange, string> = {
+  "15M": "the last 15 minutes",
+  "1H": "the last hour",
+  "1D": "today's session",
+  "1W": "the last 7 days",
+  ALL: "all recorded history",
+};
+
+// Sandbox equity history is accumulated client-side (the backend only exposes
+// the current snapshot), persisted to localStorage so longer windows fill in
+// across reloads. Retained just over a week, capped to bound storage.
+const LIVE_HISTORY_STORAGE_KEY = "tradingDashboard.liveSandboxHistory.v1";
+const LIVE_HISTORY_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
+const LIVE_HISTORY_MAX_POINTS = 5000;
 
 type ModelSelection = {
   modelKey: string;
@@ -352,18 +372,69 @@ export function DashboardClient({
   }, [autoRefresh, initialSnapshot, refreshIntervalMs, refreshSnapshot]);
 
   useEffect(() => {
+    const stored = loadLiveHistory();
+    if (stored.length) {
+      setLiveHistory((history) => mergeLiveHistory(stored, history, Date.now()));
+    }
+  }, []);
+
+  // Backfill the live chart from the server-recorded cycle journal so it shows
+  // the full day's curve immediately, not just points accumulated this session.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/live-sandbox-history", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json()) as LiveSandboxHistoryResponse;
+        if (!response.ok && payload.error) {
+          throw new Error(payload.error);
+        }
+        return payload;
+      })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        const seeded = (payload.points ?? []).reduce<LiveSandboxHistoryPoint[]>(
+          (acc, point) => {
+            const timestamp = Date.parse(point.as_of);
+            if (Number.isFinite(timestamp)) {
+              acc.push({
+                asOf: point.as_of,
+                timestamp,
+                equity: point.equity,
+                deployed: point.deployed,
+                cash: point.cash,
+              });
+            }
+            return acc;
+          },
+          [],
+        );
+        if (seeded.length) {
+          setLiveHistory((history) =>
+            mergeLiveHistory(seeded, history, Date.now()),
+          );
+        }
+      })
+      .catch(() => {
+        // Best-effort backfill — the chart still works from live accumulation.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const point = liveSandboxHistoryPoint(snapshot);
     if (!point) {
       return;
     }
-    setLiveHistory((history) => {
-      const next = [
-        ...history.filter((item) => item.timestamp !== point.timestamp),
-        point,
-      ].sort((left, right) => left.timestamp - right.timestamp);
-      return next.slice(-240);
-    });
+    setLiveHistory((history) => mergeLiveHistory(history, [point], point.timestamp));
   }, [snapshot]);
+
+  useEffect(() => {
+    saveLiveHistory(liveHistory);
+  }, [liveHistory]);
 
   useEffect(() => {
     if (
@@ -2982,13 +3053,22 @@ function LiveSandboxScreen({
   const openOrders = sandbox?.open_orders ?? [];
   const positions = sandbox?.positions ?? [];
   const fills = sandbox?.recent_fills ?? [];
-  const statusTone =
-    status === "running" || status === "armed"
-      ? "good"
-      : status === "disabled" || status === "paused" || status === "kill_switch"
-        ? "warn"
-        : "danger";
-
+  const [liveRange, setLiveRange] = useState<LiveRange>("1D");
+  const visiblePoints = useMemo(
+    () => filterLiveHistory(liveHistory, liveRange),
+    [liveHistory, liveRange],
+  );
+  const liveCap = numericValue(sandbox?.max_live_allocation) ?? 100;
+  const liveLast = visiblePoints[visiblePoints.length - 1];
+  const liveEquity =
+    liveLast?.equity ?? numericValue(sandbox?.sandbox_equity) ?? 0;
+  const liveDeployed =
+    liveLast?.deployed ?? numericValue(sandbox?.cap_deployed) ?? 0;
+  const liveCash = liveLast?.cash ?? numericValue(sandbox?.sandbox_cash) ?? 0;
+  // P&L is measured against the allocated capital (the cap is the cost basis).
+  const livePnl = liveEquity - liveCap;
+  const livePnlPct = liveCap ? (livePnl / liveCap) * 100 : 0;
+  const livePositive = livePnl >= 0;
   return (
     <section className="screen" data-screen="live" hidden={!active}>
       <div className="screen__head">
@@ -3004,7 +3084,7 @@ function LiveSandboxScreen({
       <Surface
         eyebrow="Live Control"
         title={<span data-field="live-sandbox-status">{humanizeCode(status)}</span>}
-        pill={<Pill tone={statusTone}>{enabled ? "Configured" : "Disabled"}</Pill>}
+        pill={<Pill tone={enabled ? "ai" : "ghost"}>{enabled ? "Configured" : "Disabled"}</Pill>}
       >
         <div className="k-list">
           <KRow label="Cap" value={money(sandbox?.max_live_allocation)} valueClass="pos" />
@@ -3052,18 +3132,47 @@ function LiveSandboxScreen({
       <Surface
         eyebrow="Live Graph"
         title="Sandbox equity and deployed capital"
-        pill={<Pill tone="info">{liveHistory.length}</Pill>}
       >
-        <div className="live-chart">
-          <LiveSandboxChart
-            points={liveHistory}
-            maxAllocation={numericValue(sandbox?.max_live_allocation) ?? 100}
-          />
-        </div>
-        <div className="live-chart__legend" aria-label="Live graph legend">
-          <span><i className="legend-dot legend-dot--equity" />Equity</span>
-          <span><i className="legend-dot legend-dot--deployed" />Deployed</span>
-          <span><i className="legend-line" />Cap</span>
+        <div className="live-hero">
+          <div className="live-hero__lead">
+            <div className="hero__value" data-live-equity-value>
+              {money(String(liveEquity))}
+            </div>
+            <div className="hero__delta">
+              <span className={livePositive ? "delta-pos" : "delta-neg"}>
+                {moneyDelta(livePnl)}
+              </span>
+              <span className="delta-divider">·</span>
+              <span>{percentDelta(livePnlPct)} vs cap</span>
+              <span className="delta-divider">·</span>
+              <span>{LIVE_RANGE_DESCRIPTION[liveRange]}</span>
+            </div>
+            <div
+              className="live-hero__context"
+              aria-label="Live sandbox capital breakdown"
+            >
+              <span><b>Deployed</b>{money(String(liveDeployed))}</span>
+              <span><b>Cash</b>{money(String(liveCash))}</span>
+              <span><b>Cap</b>{money(String(liveCap))}</span>
+            </div>
+          </div>
+          <div className="live-hero__chart">
+            <LiveSandboxChart points={visiblePoints} positive={livePositive} />
+          </div>
+          <div className="hero__periods" aria-label="Live graph time window">
+            {LIVE_RANGES.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className="period"
+                data-live-range={option}
+                aria-pressed={liveRange === option}
+                onClick={() => setLiveRange(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </div>
       </Surface>
 
@@ -3195,119 +3304,226 @@ function LiveSandboxScreen({
   );
 }
 
+function moneyFine(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(value);
+}
+
+function formatLiveTooltipTime(asOf: string) {
+  const date = new Date(asOf);
+  if (Number.isNaN(date.getTime())) {
+    return asOf;
+  }
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 function LiveSandboxChart({
   points,
-  maxAllocation,
+  positive,
 }: {
   points: LiveSandboxHistoryPoint[];
-  maxAllocation: number;
+  positive: boolean;
 }) {
-  const chartWidth = 960;
-  const chartHeight = 260;
-  const padX = 42;
-  const padY = 24;
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // Mirrors the home equity hero: a single gradient equity area, framed tightly
+  // around equity's own range so movement fills the box (deployed/cash/cap live
+  // in the headline numbers). The SVG fills a fixed-height container with
+  // preserveAspectRatio="none"; strokes use non-scaling-stroke and the markers
+  // are HTML overlays, so nothing renders distorted.
+  const chartWidth = 1200;
+  const chartHeight = 300;
+  const padX = 14;
+  const padY = 18;
   if (!points.length) {
     return (
       <div
         className="live-chart__empty"
         role="img"
-        aria-label="Live sandbox chart unavailable"
+        aria-label="Live sandbox equity and deployed capital"
       >
         <span>No live sandbox snapshots yet</span>
       </div>
     );
   }
 
-  const values = [
-    0,
-    maxAllocation,
-    ...points.map((point) => point.equity),
-    ...points.map((point) => point.deployed),
-  ];
-  const maxValue = Math.max(...values, 1);
-  const minValue = Math.min(...values, 0);
-  const spread = Math.max(maxValue - minValue, 1);
-  const innerWidth = chartWidth - padX * 2;
-  const innerHeight = chartHeight - padY * 2;
-  const xFor = (index: number) =>
+  const equityValues = points.map((point) => point.equity);
+  const lo = Math.min(...equityValues);
+  const hi = Math.max(...equityValues);
+  // Frame tightly around equity (so small live movements show), but bias the
+  // band into the upper portion with extra headroom below so the area fill
+  // dominates the box — the rich, full look of the home equity hero.
+  const half = Math.max((hi - lo) / 2, 0.01);
+  const yHi = hi + half * 0.6;
+  const yLo = lo - half * 2.2;
+  const ySpan = Math.max(yHi - yLo, 1e-6);
+
+  const tsMin = points[0].timestamp;
+  const tsMax = points[points.length - 1].timestamp;
+  const tsSpan = Math.max(tsMax - tsMin, 1);
+  const innerW = chartWidth - padX * 2;
+  const innerH = chartHeight - padY * 2;
+  const yFor = (value: number) => padY + (1 - (value - yLo) / ySpan) * innerH;
+  const xFor = (timestamp: number) =>
+    padX + ((timestamp - tsMin) / tsSpan) * innerW;
+
+  // With a single sample, draw a flat segment across the full width so the
+  // chart reads as "steady, no history yet" instead of a lone point.
+  const series =
     points.length === 1
-      ? chartWidth / 2
-      : padX + (index / (points.length - 1)) * innerWidth;
-  const yFor = (value: number) =>
-    chartHeight - padY - ((value - minValue) / spread) * innerHeight;
-  const pathFor = (field: "equity" | "deployed") =>
-    `M ${points
-      .map((point, index) => `${xFor(index).toFixed(1)},${yFor(point[field]).toFixed(1)}`)
-      .join(" L ")}`;
-  const equityPath = pathFor("equity");
-  const deployedPath = pathFor("deployed");
-  const capY = yFor(maxAllocation);
+      ? [
+          { x: padX, point: points[0] },
+          { x: chartWidth - padX, point: points[0] },
+        ]
+      : points.map((point) => ({ x: xFor(point.timestamp), point }));
+
+  const equityLine = `M ${series
+    .map(({ x, point }) => `${x.toFixed(1)},${yFor(point.equity).toFixed(1)}`)
+    .join(" L ")}`;
+  const firstX = series[0].x;
+  const lastX = series[series.length - 1].x;
+  const baselineY = chartHeight;
+  const equityArea = `${equityLine} L ${lastX.toFixed(1)},${baselineY} L ${firstX.toFixed(1)},${baselineY} Z`;
   const last = points[points.length - 1];
-  const lastX = xFor(points.length - 1);
-  const latestLabel = formatLiveChartTime(last.asOf);
-  const equityTone = last.equity >= maxAllocation ? "pos" : "ai";
+  const endLeft = (lastX / chartWidth) * 100;
+  const endTop = (yFor(last.equity) / chartHeight) * 100;
+
+  const areaClass = positive ? "live-chart__area--pos" : "live-chart__area--neg";
+  const lineClass = positive ? "live-chart__line--pos" : "live-chart__line--neg";
+  const dotClass = positive
+    ? "live-chart__end-dot--pos"
+    : "live-chart__end-dot--neg";
+
+  // Map the pointer back into viewBox coords (the SVG stretches with
+  // preserveAspectRatio="none") and snap to the nearest sample by x.
+  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width) {
+      return;
+    }
+    const viewX = ((event.clientX - rect.left) / rect.width) * chartWidth;
+    let nearest = 0;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < series.length; index += 1) {
+      const dist = Math.abs(series[index].x - viewX);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = index;
+      }
+    }
+    setHoverIndex(nearest);
+  };
+
+  const active =
+    hoverIndex !== null && hoverIndex >= 0 && hoverIndex < series.length
+      ? series[hoverIndex]
+      : null;
+  const hoverLeftPct = active ? (active.x / chartWidth) * 100 : 0;
+  const hoverTopPct = active
+    ? (yFor(active.point.equity) / chartHeight) * 100
+    : 0;
+  // Flip the tooltip left of the crosshair near the right edge, and clamp its
+  // vertical position so it never spills out of the clipped box.
+  const tipFlip = active ? active.x > chartWidth * 0.6 : false;
+  const tipTopPct = Math.min(Math.max(hoverTopPct, 16), 84);
 
   return (
-    <svg
-      className="area-chart live-chart__svg"
-      viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label="Live sandbox equity and deployed capital"
-    >
-      {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-        const y = padY + tick * innerHeight;
-        return (
-          <line
-            key={tick}
-            className="grid-line"
-            x1={padX}
-            x2={chartWidth - padX}
-            y1={y}
-            y2={y}
-          />
-        );
-      })}
-      <line
-        className="live-chart__cap"
-        x1={padX}
-        x2={chartWidth - padX}
-        y1={capY}
-        y2={capY}
-      />
-      <text className="axis-text" x={padX} y={Math.max(12, capY - 6)}>
-        {money(String(maxAllocation))} cap
-      </text>
-      <path d={deployedPath} className="line-ai" data-live-deployed-line />
-      <path
-        d={equityPath}
-        className={equityTone === "pos" ? "line-pos" : "line-ai"}
-        data-live-equity-line
-      />
-      <circle
-        className={equityTone === "pos" ? "end-dot" : "end-dot ai"}
-        cx={lastX}
-        cy={yFor(last.equity)}
-        r="4"
-      />
-      <circle
-        className="end-dot market"
-        cx={lastX}
-        cy={yFor(last.deployed)}
-        r="3.5"
-      />
-      <text className="axis-text" x={padX} y={chartHeight - 6}>
-        {formatLiveChartTime(points[0].asOf)}
-      </text>
-      <text
-        className="axis-text"
-        x={chartWidth - padX}
-        y={chartHeight - 6}
-        textAnchor="end"
+    <>
+      <svg
+        className="live-chart__svg"
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Live sandbox equity and deployed capital"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHoverIndex(null)}
       >
-        {latestLabel}
-      </text>
-    </svg>
+        <defs>
+          <linearGradient id="liveFillPos" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--pos)" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="var(--pos)" stopOpacity="0.02" />
+          </linearGradient>
+          <linearGradient id="liveFillNeg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--neg)" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="var(--neg)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Transparent capture layer so hover fires over the whole chart, not
+            just the painted area/line. */}
+        <rect
+          x={0}
+          y={0}
+          width={chartWidth}
+          height={chartHeight}
+          fill="transparent"
+          pointerEvents="all"
+        />
+        <path d={equityArea} className={areaClass} />
+        <path
+          d={equityLine}
+          className={lineClass}
+          vectorEffect="non-scaling-stroke"
+          data-live-equity-line
+        />
+        {active ? (
+          <line
+            className="chart-crosshair__line"
+            x1={active.x}
+            x2={active.x}
+            y1={0}
+            y2={chartHeight}
+            vectorEffect="non-scaling-stroke"
+            aria-hidden="true"
+          />
+        ) : null}
+      </svg>
+      <span
+        className={`live-chart__end-dot ${dotClass}`}
+        style={{ left: `${endLeft}%`, top: `${endTop}%` }}
+        data-live-end-dot
+        aria-hidden
+      />
+      {active ? (
+        <span
+          className={`live-chart__end-dot ${dotClass}`}
+          style={{ left: `${hoverLeftPct}%`, top: `${hoverTopPct}%` }}
+          data-live-hover-dot
+          aria-hidden
+        />
+      ) : null}
+      {active ? (
+        <div
+          className={`chart-tooltip${tipFlip ? " chart-tooltip--flip" : ""}`}
+          style={{ left: `${hoverLeftPct}%`, top: `${tipTopPct}%` }}
+          aria-hidden="true"
+        >
+          <span className="chart-tooltip__date mono">
+            {formatLiveTooltipTime(active.point.asOf)}
+          </span>
+          <span className="chart-tooltip__row">
+            Equity
+            <strong className="mono">{moneyFine(active.point.equity)}</strong>
+          </span>
+          <span className="chart-tooltip__row">
+            Deployed
+            <strong className="mono">{moneyFine(active.point.deployed)}</strong>
+          </span>
+          <span className="chart-tooltip__row">
+            Cash
+            <strong className="mono">{moneyFine(active.point.cash)}</strong>
+          </span>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -7565,6 +7781,74 @@ function liveSandboxHistoryPoint(
   };
 }
 
+function mergeLiveHistory(
+  existing: LiveSandboxHistoryPoint[],
+  incoming: LiveSandboxHistoryPoint[],
+  referenceTs: number,
+): LiveSandboxHistoryPoint[] {
+  const byTimestamp = new Map<number, LiveSandboxHistoryPoint>();
+  for (const point of existing) byTimestamp.set(point.timestamp, point);
+  for (const point of incoming) byTimestamp.set(point.timestamp, point);
+  const cutoff = referenceTs - LIVE_HISTORY_MAX_AGE_MS;
+  return Array.from(byTimestamp.values())
+    .filter((point) => Number.isFinite(point.timestamp) && point.timestamp >= cutoff)
+    .sort((left, right) => left.timestamp - right.timestamp)
+    .slice(-LIVE_HISTORY_MAX_POINTS);
+}
+
+function loadLiveHistory(): LiveSandboxHistoryPoint[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LIVE_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const points = parsed.filter(
+      (entry): entry is LiveSandboxHistoryPoint =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        Number.isFinite((entry as LiveSandboxHistoryPoint).timestamp) &&
+        Number.isFinite((entry as LiveSandboxHistoryPoint).equity) &&
+        Number.isFinite((entry as LiveSandboxHistoryPoint).deployed),
+    );
+    return mergeLiveHistory([], points, Date.now());
+  } catch {
+    return [];
+  }
+}
+
+function saveLiveHistory(history: LiveSandboxHistoryPoint[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LIVE_HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch {
+    // localStorage may be unavailable (private mode, quota); persistence is best-effort.
+  }
+}
+
+function filterLiveHistory(
+  points: LiveSandboxHistoryPoint[],
+  range: LiveRange,
+): LiveSandboxHistoryPoint[] {
+  if (range === "ALL" || points.length === 0) return points;
+  // Anchor the window to the latest recorded point so a live chart always shows
+  // its most recent data even if the page has been idle or the feed is lagging.
+  const referenceTs = points[points.length - 1].timestamp;
+  if (!Number.isFinite(referenceTs)) return points;
+  if (range === "1D") {
+    const todayKey = marketDateKey(new Date(referenceTs).toISOString());
+    return points.filter((point) => marketDateKey(point.asOf) === todayKey);
+  }
+  const windowMs =
+    range === "15M"
+      ? 15 * 60 * 1000
+      : range === "1H"
+        ? 60 * 60 * 1000
+        : 7 * 24 * 60 * 60 * 1000;
+  const cutoff = referenceTs - windowMs;
+  return points.filter((point) => point.timestamp >= cutoff);
+}
+
 function confidenceBand(score: number | undefined) {
   if (score === undefined) return "—";
   if (score < 0.4) return "Low";
@@ -7648,21 +7932,6 @@ function formatIso(value: string | undefined) {
     return "pending";
   }
   return value;
-}
-
-function formatLiveChartTime(value: string | undefined) {
-  if (!value) {
-    return "pending";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return new Intl.DateTimeFormat("en", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(date);
 }
 
 function screenFromHash(hash: string): ScreenKey | null {

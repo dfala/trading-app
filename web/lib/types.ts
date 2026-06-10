@@ -821,3 +821,17 @@ export type ShadowHistoryResponse = {
   models: ShadowModelSeries[];
   error?: string;
 };
+
+export type LiveSandboxEquityPoint = {
+  as_of: string;
+  equity: number;
+  deployed: number;
+  cash: number;
+};
+
+export type LiveSandboxHistoryResponse = {
+  generated_at: string;
+  source: string;
+  points: LiveSandboxEquityPoint[];
+  error?: string;
+};

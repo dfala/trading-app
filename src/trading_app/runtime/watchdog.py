@@ -55,6 +55,7 @@ class RuntimeWatchdogConfig:
     launchd_label: str = DEFAULT_LAUNCHD_LABEL
     max_heartbeat_age: timedelta = timedelta(minutes=5)
     restart: bool = False
+    restart_on_runtime_health_failure: bool = False
 
 
 def run_watchdog(
@@ -125,7 +126,11 @@ def run_watchdog(
             checks.append(
                 RuntimeWatchdogCheck(
                     name="runtime_health",
-                    status=RuntimePreflightStatus.FAILED,
+                    status=(
+                        RuntimePreflightStatus.FAILED
+                        if config.restart_on_runtime_health_failure
+                        else RuntimePreflightStatus.WARNING
+                    ),
                     message=f"Runtime health is {health_status}.",
                 )
             )
@@ -138,8 +143,13 @@ def run_watchdog(
                 )
             )
 
+    restartable_failed_checks = {"api_snapshot", "heartbeat"}
+    if config.restart_on_runtime_health_failure:
+        restartable_failed_checks.add("runtime_health")
     needs_restart = any(
-        check.status == RuntimePreflightStatus.FAILED for check in checks
+        check.status == RuntimePreflightStatus.FAILED
+        and check.name in restartable_failed_checks
+        for check in checks
     )
     action = RuntimeWatchdogAction.NONE
     if needs_restart and config.restart:
@@ -205,6 +215,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--launchd-label", default=DEFAULT_LAUNCHD_LABEL)
     parser.add_argument("--max-heartbeat-age-minutes", type=float, default=5)
     parser.add_argument("--restart", action="store_true")
+    parser.add_argument(
+        "--restart-on-runtime-health-failure",
+        action="store_true",
+        help=(
+            "Restart on degraded/critical runtime health even when the "
+            "heartbeat is fresh."
+        ),
+    )
     args = parser.parse_args(argv)
 
     report = run_watchdog(
@@ -214,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
             launchd_label=args.launchd_label,
             max_heartbeat_age=timedelta(minutes=args.max_heartbeat_age_minutes),
             restart=args.restart,
+            restart_on_runtime_health_failure=args.restart_on_runtime_health_failure,
         )
     )
     print(render_watchdog_text(report))
