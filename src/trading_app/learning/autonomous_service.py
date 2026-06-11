@@ -349,6 +349,42 @@ DEFAULT_HISTORICAL_HYPOTHESIS_PROFILES = (
         ),
         max_strategies=36,
     ),
+    HistoricalHypothesisProfile(
+        profile_id="macro-risk-state-overlay",
+        name="Macro Risk-State Overlay",
+        summary=(
+            "Search whether defensive regime, volatility, cash-rotation, and "
+            "trend signals can identify risk-on/risk-off states before "
+            "sector-specific sleeves are selected."
+        ),
+        mode=AutonomousLearningCycleMode.WEEKLY,
+        universes=("macro-defensive", "broad-core"),
+        strategy_ids=(
+            "defensive_regime_switch",
+            "volatility_aware_etf",
+            "cash_rotation_model",
+            "trend_following_etf",
+        ),
+        max_strategies=36,
+    ),
+    HistoricalHypothesisProfile(
+        profile_id="cross-asset-risk-barometer",
+        name="Cross-Asset Risk Barometer",
+        summary=(
+            "Cross-check broad, defensive, and liquid risk-on ETFs for "
+            "relative-strength or volatility signals that can become inputs "
+            "to later portfolio-level composition."
+        ),
+        mode=AutonomousLearningCycleMode.WEEKLY,
+        universes=("broad-core", "macro-defensive", "liquid-risk-on"),
+        strategy_ids=(
+            "benchmark_relative_strength_etf",
+            "defensive_regime_switch",
+            "volatility_aware_etf",
+            "cash_rotation_model",
+        ),
+        max_strategies=36,
+    ),
 )
 
 GENERATED_START_COHORTS = (
@@ -562,6 +598,36 @@ GENERATED_STRATEGY_BUNDLES = (
         36,
     ),
     _GeneratedStrategyBundle(
+        "macro-risk-state",
+        "Macro Risk State",
+        (
+            "Search defensive regime, volatility, cash rotation, and trend "
+            "signals as market-state features before sector composition."
+        ),
+        (
+            "defensive_regime_switch",
+            "volatility_aware_etf",
+            "cash_rotation_model",
+            "trend_following_etf",
+        ),
+        36,
+    ),
+    _GeneratedStrategyBundle(
+        "cross-asset-barometer",
+        "Cross-Asset Risk Barometer",
+        (
+            "Search relative strength, defensive regime, volatility, and cash "
+            "rotation across broad, defensive, and risk-on universes."
+        ),
+        (
+            "benchmark_relative_strength_etf",
+            "defensive_regime_switch",
+            "volatility_aware_etf",
+            "cash_rotation_model",
+        ),
+        36,
+    ),
+    _GeneratedStrategyBundle(
         "semiconductor-polish",
         "Semiconductor Polish",
         (
@@ -678,6 +744,9 @@ class AutonomousLearningServiceConfig(TradingModel):
     market_timezone: str = MARKET_TIMEZONE
     max_strategies_historical: int = Field(default=36, ge=0)
     max_strategies_fresh: int = Field(default=24, ge=0)
+    screening_enabled: bool = False
+    screening_max_strategies: int = Field(default=12, ge=1)
+    screening_top_k: int = Field(default=8, ge=1)
     historical_hypotheses: tuple[HistoricalHypothesisProfile, ...] = (
         DEFAULT_HISTORICAL_HYPOTHESIS_PROFILES
     )
@@ -1096,6 +1165,9 @@ def main(argv: list[str] | None = None) -> int:
         failed_retry_minutes=args.failed_retry_minutes,
         max_strategies_historical=args.max_strategies_historical,
         max_strategies_fresh=args.max_strategies_fresh,
+        screening_enabled=args.screening_enabled,
+        screening_max_strategies=args.screening_max_strategies,
+        screening_top_k=args.screening_top_k,
         dynamic_historical_backlog=not args.no_dynamic_historical_backlog,
         dynamic_historical_backlog_size=args.dynamic_historical_backlog_size,
         leader_tuning_profile_count=args.leader_tuning_profile_count,
@@ -1157,6 +1229,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--failed-retry-minutes", type=int, default=60)
     parser.add_argument("--max-strategies-historical", type=int, default=36)
     parser.add_argument("--max-strategies-fresh", type=int, default=24)
+    parser.add_argument("--screening-enabled", action="store_true")
+    parser.add_argument("--screening-max-strategies", type=int, default=12)
+    parser.add_argument("--screening-top-k", type=int, default=8)
     parser.add_argument("--no-dynamic-historical-backlog", action="store_true")
     parser.add_argument("--dynamic-historical-backlog-size", type=int, default=5000)
     parser.add_argument("--leader-tuning-profile-count", type=int, default=6)
@@ -1204,6 +1279,9 @@ def _cycle_config(
             warmup_calendar_days=DEFAULT_WARMUP_CALENDAR_DAYS,
             warmup_trading_days=DEFAULT_WARMUP_TRADING_DAYS,
             max_strategies=config.max_strategies_fresh,
+            screening_enabled=config.screening_enabled,
+            screening_max_strategies=config.screening_max_strategies,
+            screening_top_k=config.screening_top_k,
             fetch_missing=config.fetch_missing_after_close,
             refresh_data=config.refresh_data_after_close,
             champion_model_key=config.champion_model_key,
@@ -1227,6 +1305,9 @@ def _cycle_config(
         warmup_calendar_days=DEFAULT_WARMUP_CALENDAR_DAYS,
         warmup_trading_days=DEFAULT_WARMUP_TRADING_DAYS,
         max_strategies=_historical_max_strategies(profile, config),
+        screening_enabled=config.screening_enabled,
+        screening_max_strategies=config.screening_max_strategies,
+        screening_top_k=config.screening_top_k,
         fetch_missing=False,
         refresh_data=False,
         champion_model_key=config.champion_model_key,
@@ -1714,6 +1795,11 @@ def _bundle_compatible_with_universe(
             universe in {"sector-spdr", "macro-defensive", "broad-core"}
             for universe in group.universes
         )
+    if bundle.bundle_id in {"macro-risk-state", "cross-asset-barometer"}:
+        return any(
+            universe in {"macro-defensive", "broad-core", "liquid-risk-on"}
+            for universe in group.universes
+        )
     return True
 
 
@@ -2068,10 +2154,17 @@ def _policy_summary(config: AutonomousLearningServiceConfig) -> str:
         if config.repeat_historical_sweeps or config.tuning_mode
         else "advance to the next unseen fingerprint"
     )
+    screening_text = (
+        " with cheap first-pass screening enabled "
+        f"(top {config.screening_max_strategies} scan into "
+        f"top {config.screening_top_k} full validation)"
+        if config.screening_enabled
+        else ""
+    )
     return (
         "Historical experiments run as a fingerprinted novelty queue with a "
         f"{config.historical_cooldown_minutes} minute cooldown"
-        f"{_legacy_interval_suffix(config)} and {sweep_policy}; queued "
+        f"{_legacy_interval_suffix(config)} and {sweep_policy}{screening_text}; queued "
         "profiles: "
         f"{len(config.historical_hypotheses)} base hypothesis families"
         f"{backlog_text} "

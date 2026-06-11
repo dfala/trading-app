@@ -14,12 +14,15 @@ from trading_app.learning.autonomous import (
     AutonomousLearningCycleStatus,
     AutonomousLearningLeaderboard,
     AutonomousLearningLeaderboardEntry,
+    AutonomousResearchUsefulnessLabel,
     _autonomous_catalog,
     _candidate_is_pilot_eligible,
     _candidate_is_promotion_qualified,
     _candidate_passes_shadow_gate,
     _filtered_catalog,
     _limited_catalog,
+    _portfolio_composition_report,
+    _with_research_label,
     render_autonomous_learning_cycle_markdown,
     update_autonomous_learning_leaderboard,
 )
@@ -127,7 +130,15 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert run.leaderboard.entries
     assert run.candidate_readiness is not None
     assert run.candidate_readiness.pilot_status == "research_only"
+    assert run.candidate_readiness.research_label_counts
+    assert run.portfolio_composition is not None
+    assert not run.portfolio_composition.broker_orders_submitted
     assert any(candidate.late_entry_risk for candidate in run.top_candidates)
+    assert all(
+        candidate.research_label != AutonomousResearchUsefulnessLabel.DEAD
+        for candidate in run.top_candidates
+        if candidate.full_delta > 0
+    )
     assert run.top_candidates[0].manual_approval_required
     assert "cannot grant paper or live trading authority" in markdown
     assert "Shadow Arena" in markdown
@@ -146,6 +157,9 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert (
         tmp_path / "reports" / "learning-cycle-test-promotion-qualified.md"
     ).exists()
+    assert (
+        tmp_path / "reports" / "learning-cycle-test-portfolio-composition.md"
+    ).exists()
     assert (tmp_path / "reports" / "learning-cycle-test-experiment-queue.md").exists()
     assert (tmp_path / "runtime" / "learning" / "research-fingerprints.json").exists()
     assert (tmp_path / "runtime" / "learning" / "learning-leaderboard.json").exists()
@@ -156,6 +170,8 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert (tmp_path / "runtime" / "learning" / "raw-alpha-watchlist.md").exists()
     assert (tmp_path / "runtime" / "learning" / "low-drawdown-watchlist.md").exists()
     assert (tmp_path / "runtime" / "learning" / "promotion-qualified.md").exists()
+    assert (tmp_path / "runtime" / "learning" / "portfolio-composition.json").exists()
+    assert (tmp_path / "runtime" / "learning" / "portfolio-composition.md").exists()
     assert (tmp_path / "runtime" / "learning" / "experiment-queue.md").exists()
     assert run.artifact_paths["markdown"].endswith("learning-cycle-test.md")
     assert run.artifact_paths["leaderboard_markdown"].endswith(
@@ -179,6 +195,8 @@ def test_autonomous_cycle_scores_candidates_and_writes_artifacts(tmp_path) -> No
     assert latest_payload["shadow_arena"]["broker_orders_submitted"] is False
     assert latest_payload["leaderboard"]["entries"]
     assert latest_payload["candidate_readiness"]["pilot_status"]
+    assert latest_payload["candidate_readiness"]["research_label_counts"]
+    assert latest_payload["portfolio_composition"]["broker_orders_submitted"] is False
     recovered = RuntimePersistenceStore(
         tmp_path / "runtime"
     ).read_autonomous_learning_cycle()
@@ -328,6 +346,38 @@ def test_sector_sleeve_blocks_authority_but_can_shadow() -> None:
     assert not _candidate_is_promotion_qualified(candidate)
     assert not _candidate_is_pilot_eligible(candidate)
     assert _candidate_passes_shadow_gate(candidate)
+    labeled = _with_research_label(candidate)
+    assert labeled.research_label == AutonomousResearchUsefulnessLabel.NEEDS_COMPOSITION
+
+    report = _portfolio_composition_report(
+        AutonomousLearningCycleRun(
+            run_id="composition-test",
+            generated_at=NOW,
+            mode=AutonomousLearningCycleMode.WEEKLY,
+            hypothesis_id="composition",
+            status=AutonomousLearningCycleStatus.COMPLETED,
+            start_date=date(2016, 1, 4),
+            end_date=date(2026, 5, 29),
+            benchmark="SPY",
+            feed=DataFeed.IEX,
+            universe_ids=("liquid-risk-on",),
+            strategy_ids=("risk_managed_semiconductor",),
+            candidate_count=1,
+            completed_report_count=1,
+            skipped_count=0,
+            current_champion_model_key="champion",
+            top_candidates=(candidate,),
+            summary="completed",
+            next_actions=("review",),
+        )
+    )
+
+    assert report.candidates
+    assert report.candidates[0].research_label == (
+        AutonomousResearchUsefulnessLabel.NEEDS_COMPOSITION
+    )
+    assert report.candidates[0].suggested_weight == 0.05
+    assert not report.broker_orders_submitted
 
 
 def test_autonomous_cycle_records_blocked_state_when_data_is_missing(tmp_path) -> None:
@@ -451,17 +501,14 @@ def test_discovery_scoring_excludes_baseline_and_control_rows() -> None:
 
 
 def test_discovery_scoring_marks_late_entry_risk() -> None:
-    reason = (
-        "Latest 63 trading days account for 51.5% of full-period excess return."
-    )
+    reason = "Latest 63 trading days account for 51.5% of full-period excess return."
     full_report = _report(
         run_id="full",
         rows=(
             _comparison_row(
                 rank=1,
                 model_key=(
-                    "market_drawdown_circuit_breaker:"
-                    "top-semi-l126-any-dd10-risk0-cash"
+                    "market_drawdown_circuit_breaker:top-semi-l126-any-dd10-risk0-cash"
                 ),
                 strategy_name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
                 net_total_return=10.0,
@@ -478,8 +525,7 @@ def test_discovery_scoring_marks_late_entry_risk() -> None:
             _comparison_row(
                 rank=1,
                 model_key=(
-                    "market_drawdown_circuit_breaker:"
-                    "top-semi-l126-any-dd10-risk0-cash"
+                    "market_drawdown_circuit_breaker:top-semi-l126-any-dd10-risk0-cash"
                 ),
                 strategy_name="Market Drawdown Circuit Breaker Semiconductor Sleeve",
                 net_total_return=0.5,

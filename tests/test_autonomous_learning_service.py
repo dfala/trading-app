@@ -312,6 +312,39 @@ def test_default_historical_profiles_exclude_static_allocation_candidates() -> N
         assert "static_etf_allocation" not in profile.strategy_ids
 
 
+def test_default_historical_profiles_include_macro_risk_state_exploration() -> None:
+    profile_ids = {
+        profile.profile_id for profile in DEFAULT_HISTORICAL_HYPOTHESIS_PROFILES
+    }
+
+    assert "macro-risk-state-overlay" in profile_ids
+    assert "cross-asset-risk-barometer" in profile_ids
+
+
+def test_screening_controls_are_passed_to_cycle_config(tmp_path) -> None:
+    config = _config(tmp_path).model_copy(
+        update={
+            "screening_enabled": True,
+            "screening_max_strategies": 10,
+            "screening_top_k": 4,
+        }
+    )
+    runner = RecordingRunner()
+    service = AutonomousLearningService(
+        config=config,
+        runner=runner,
+        clock=lambda: MARKET_HOURS,
+        sleeper=lambda seconds: None,
+    )
+
+    state = service.run_once(now=MARKET_HOURS)
+
+    assert runner.configs[0].screening_enabled
+    assert runner.configs[0].screening_max_strategies == 10
+    assert runner.configs[0].screening_top_k == 4
+    assert "cheap first-pass screening enabled" in state.policy_summary
+
+
 def test_legacy_historical_state_seeds_first_hypothesis_profile(tmp_path) -> None:
     config = _config(tmp_path)
     legacy = _initial_state(MARKET_HOURS, config).model_copy(
